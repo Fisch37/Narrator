@@ -27,7 +27,6 @@ class Mask:
     id: int
     name: str
     description: str
-    display_name: str
     avatar_url: str
     _fields: LimitedList[Field]
     owner: discord.Member
