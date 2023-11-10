@@ -29,7 +29,7 @@ class Mask:
     description: str
     avatar_url: str
     _fields: LimitedList[Field]
-    owner: discord.Member
+    owner: discord.User
 
     def to_embed(self, embed: discord.Embed=None) -> discord.Embed:
         """
