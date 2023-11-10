@@ -10,8 +10,10 @@ import discord
 from discord.ext import commands
 
 from logger_setup import setup_logging
+from config_interpreter import read_config
 
 TOKEN_PATH = "token"
+CONFIG_PATH = "config.cfg"
 EXTENSIONS = (
 
 )
@@ -43,6 +45,7 @@ def read_token():
 setup_logging()
 intents = discord.Intents.default()
 bot = commands.Bot("/",intents=intents)
+config = read_config(CONFIG_PATH)
 
 @bot.event
 async def on_ready():
