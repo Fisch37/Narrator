@@ -24,6 +24,7 @@ class SQLMasks(Base):
     description: Mapped[str] = mapped_column()
     avatar_url: Mapped[str|None] = mapped_column()
     owner: Mapped[str] = mapped_column()
+    guild: Mapped[str] = mapped_column()
 
 class SQLMaskFields(Base):
     """

@@ -4,6 +4,7 @@ This should always be used in bot code as an abstraction to avoid
 direct calls to SQL.
 """
 from dataclasses import dataclass
+from logging import getLogger
 import asyncio
 import discord
 from discord.ext.commands import Bot
@@ -13,6 +14,7 @@ from data.sql.engine import get_session
 from util import LimitedList
 
 EMBED_MAX_FIELDS = 25
+LOGGER = getLogger("data.masks")
 
 @dataclass
 class Field:
@@ -63,6 +65,7 @@ class Mask:
     avatar_url: str
     _fields: LimitedList[Field]
     owner: discord.User
+    guild: discord.Guild
 
     def to_embed(self, embed: discord.Embed=None) -> discord.Embed:
         """
@@ -108,13 +111,17 @@ class Mask:
             # This is a slow-down when executed from _make_without_fields.
             # However: Fixing this would obfuscate code and could introduce bugs.
             owner = bot.get_user() or await bot.fetch_user(int(sqlmask.owner))
+        guild = bot.get_guild(int(sqlmask.guild))
+        if guild is None:
+            LOGGER.error("Created Mask object with guild=None!")
         return Mask(
             sqlmask.id,
             sqlmask.name,
             sqlmask.description,
             sqlmask.avatar_url,
             fields,
-            owner
+            owner,
+            guild
         )
 
     @staticmethod
