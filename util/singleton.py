@@ -14,8 +14,8 @@ class Singleton:
     """
     __OBJECT_DATA = {}
 
-    def __new__(cls, *args, **kwargs) -> Self:
+    def __new__(cls, *_args, **_kwargs) -> Self:
         try:
             return cls.__OBJECT_DATA[cls]
         except KeyError:
-            return super().__new__(cls,*args,**kwargs)
+            return super().__new__(cls)
