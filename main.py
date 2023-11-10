@@ -60,7 +60,7 @@ async def main():
                 tg.create_task(
                     bot.load_extension(extension),
                     name=f"Loading Extension {extension}"
-                    )
+                )
 
         await bot.start(read_token())
 
