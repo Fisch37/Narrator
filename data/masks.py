@@ -5,7 +5,7 @@ direct calls to SQL.
 """
 from dataclasses import dataclass
 import discord
-from ..util import LimitedList
+from util import LimitedList
 
 @dataclass
 class Field:
