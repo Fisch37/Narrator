@@ -11,6 +11,7 @@ from discord.ext import commands
 
 from logger_setup import setup_logging
 from config_interpreter import read_config
+from data import AsyncDatabase
 
 TOKEN_PATH = "token"
 CONFIG_PATH = "config.cfg"
@@ -50,7 +51,7 @@ async def on_ready():
 
 async def main():
     """Main executing function of the bot"""
-    async with bot:
+    async with bot, AsyncDatabase(config["Database"]["url"]):
         async with asyncio.TaskGroup() as tg:
             for extension in EXTENSIONS:
                 tg.create_task(
