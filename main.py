@@ -28,18 +28,14 @@ def read_token():
         Path(__file__).parent,
         TOKEN_PATH
     )
-
     if not path.exists():
         logging.error('The token file "%s" does not exist!',TOKEN_PATH)
         exit(102)
-
     token = path.read_text("utf-8")\
         .strip()
-
     if len(token) == 0:
         logging.error("No token is set!")
         exit(101)
-
     return token
 
 setup_logging()
