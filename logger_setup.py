@@ -2,35 +2,30 @@
 Exposes a single function "setup_logging" that initialises the logger
 for a 
 """
-from queue import Queue
-from logging.handlers import QueueHandler, QueueListener
-from logging import getLogger, StreamHandler, Formatter
+# from queue import Queue
+# from logging.handlers import QueueHandler, QueueListener
+# from logging import getLogger, StreamHandler, Formatter
 
-DEFAULT_LOGGING_FORMAT = "[%(asctime)s | %(name)s, %(threadName)s \
-] %(levelname)s: %(msg)s"
+from discord.utils import setup_logging as discord_logging
+
+# NOTE: This is unused
+# DEFAULT_LOGGING_FORMAT = "[%(asctime)s | %(name)s, %(threadName)s \
+# ] %(levelname)s: %(msg)s"
 
 __all__ = (
     "setup_logging",
 )
 
 def setup_logging(
-        logging_level: str="INFO",
-        logging_format: str=DEFAULT_LOGGING_FORMAT
+        logging_level: str="INFO"
     ):
     """
     Initialises the default logger to use some relevant info.
     Uses a queue-based logger to avoid blocking behaviour in uncertain
     application scenarios.
     """
-    que = Queue()
-    queue_handler = QueueHandler(que)
-    handler = StreamHandler()
-    listener = QueueListener(que, handler)
+    # TODO: Find some way to implement this with a Queue to avoid blocking behaviour
 
-    root = getLogger()
-    root.setLevel(logging_level)
-    root.addHandler(queue_handler)
-    handler.setFormatter(
-        Formatter(logging_format)
+    discord_logging(
+        level=logging_level
     )
-    listener.start()
