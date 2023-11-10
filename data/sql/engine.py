@@ -9,7 +9,7 @@ import sqlalchemy.ext.asyncio as asql
 from util import Singleton
 from data.sql.ormclasses import Base
 
-LOGGER = logging.getLogger("Database")
+LOGGER = logging.getLogger("data.sql.engine")
 
 class AsyncDatabase(Singleton):
     """
