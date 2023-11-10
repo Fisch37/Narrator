@@ -42,3 +42,7 @@ class LimitedList(list[T]):
         the current length.
         """
         return self._size
+
+
+    def __repr__(self) -> str:
+        return f"LimitedList({self.size}@{list.__repr__(self)})"
