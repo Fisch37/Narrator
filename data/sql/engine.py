@@ -17,7 +17,9 @@ class AsyncDatabase(Singleton):
     Should be used with async-with statement to properly initialise the database api.
     Closes the engine after exiting the context manager.
     """
-    def __init__(self, url: str):
+    def __init__(self, url: str|None=None):
+        if url is None:
+            raise RuntimeError("First-time constructor must specify url argument")
         self._engine = asql.create_async_engine(url)
         self._sessionmaker = asql.async_sessionmaker(
             self.engine,
@@ -34,7 +36,7 @@ class AsyncDatabase(Singleton):
         return self._engine
 
     @property
-    def sessionmaker(self) -> asql.async_sessionmaker:
+    def sessionmaker(self) -> asql.async_sessionmaker[asql.AsyncSession]:
         """
         Returns a callable that creates a new AsyncSession.
         """
@@ -58,7 +60,7 @@ class AsyncDatabase(Singleton):
         self._opened = False
         await self.engine.dispose()
 
-def get_sessionmaker() -> asql.async_sessionmaker:
+def get_sessionmaker() -> asql.async_sessionmaker[asql.AsyncSession]:
     """
     Shorthand for getting a sessionmaker from the database manager.
     Issues a warning when getting the sessionmaker from an unopened engine.
@@ -67,3 +69,11 @@ def get_sessionmaker() -> asql.async_sessionmaker:
     if not database.is_opened:
         LOGGER.warning("Got sessionmaker of unopened/closed engine!")
     return database.sessionmaker
+
+def get_session() -> asql.AsyncSession:
+    """
+    Shorthand for getting a new session from the database manager.
+    In long form this would be roughly equal to `AsyncDatabase().sessionmaker()`
+    Issues a warning when getting the sessionmaker from an unopened engine.
+    """
+    return get_sessionmaker()()
