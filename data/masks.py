@@ -98,7 +98,7 @@ class Mask:
     @property
     def fields(self) -> LimitedList[Field]:
         """
-        The fields of the 
+        The fields of the Mask embed.
         """
         return self._fields
 
@@ -129,15 +129,16 @@ class Mask:
         )
 
     @staticmethod
-    async def _make_without_fields(
+    async def _make_without_given_fields(
         sqlmask: SQLMasks,
-        bot: Bot
+        bot: Bot,
+        owner: discord.User|None=None
     ) -> "Mask":
         fields = LimitedList(
             await Field.get_by_mask_id(mask_id=sqlmask.id),
             size=EMBED_MAX_FIELDS
         )
-        return await Mask._from_sql(sqlmask,fields,bot)
+        return await Mask._from_sql(sqlmask,fields,bot,owner)
 
     @staticmethod
     async def get_from_id(id_: int, bot: Bot) -> "Mask|None":
@@ -150,7 +151,7 @@ class Mask:
             if sqlmask is None:
                 return None
 
-            return await Mask._make_without_fields(sqlmask,bot)
+            return await Mask._make_without_given_fields(sqlmask,bot)
 
     @staticmethod
     async def get_by_owner(owner: discord.User|int, bot: Bot) -> list["Mask"]:
@@ -162,12 +163,17 @@ class Mask:
             owner_id = owner.id
         else:
             owner_id = owner
+            owner = None
         async with get_session() as session:
             sqlmasks_iterator = await session.scalars(
                 select(SQLMasks)
                 .where(SQLMasks.owner == str(owner_id))
             )
             return await asyncio.gather(*(
-                Mask._make_without_fields(sqlmask, bot)
+                Mask._make_without_given_fields(
+                    sqlmask,
+                    bot,
+                    owner
+                )
                 for sqlmask in sqlmasks_iterator
             ))
