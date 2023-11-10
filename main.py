@@ -14,7 +14,7 @@ from config_interpreter import read_config
 from data import AsyncDatabase
 
 TOKEN_PATH = "token"
-CONFIG_PATH = "config.cfg"
+CONFIG_PATH = "config.toml"
 EXTENSIONS = (
 
 )
