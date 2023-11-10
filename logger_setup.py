@@ -2,7 +2,9 @@
 Exposes a single function "setup_logging" that initialises the logger
 for a 
 """
-from logging import Formatter
+from logging import Formatter, StreamHandler
+from logging.handlers import QueueHandler, QueueListener
+from queue import Queue
 
 from discord.utils import setup_logging as discord_logging, _ColourFormatter
 from colorama.ansi import Fore, Style
@@ -33,9 +35,19 @@ def setup_logging(
     Uses a queue-based logger to avoid blocking behaviour in uncertain
     application scenarios.
     """
-    # TODO: Find some way to implement this with a Queue to avoid blocking behaviour
+    queue = Queue(-1)
+    queue_handler = QueueHandler(queue)
+    stderr_handler = StreamHandler()
+    stderr_handler.setFormatter(formatter)
+
+    queue_listener = QueueListener(
+        queue,
+        stderr_handler
+    )
+    queue_listener.start()
 
     discord_logging(
         level=logging_level,
-        formatter=formatter
+        formatter=None,
+        handler=queue_handler
     )
