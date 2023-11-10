@@ -40,8 +40,10 @@ class SQLMaskFields(Base):
     value: Mapped[str] = mapped_column()
     inline: Mapped[bool] = mapped_column()
 
-    __table_args__ = UniqueConstraint(
-        "mask_id",
-        "index",
-        name="list_position_uniqueness"
+    __table_args__ = (
+        UniqueConstraint(
+            "mask_id",
+            "index",
+            name="list_position_uniqueness"
+        ),
     )
