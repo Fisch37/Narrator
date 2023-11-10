@@ -41,6 +41,10 @@ class Field:
 
     @staticmethod
     async def get_by_mask_id(mask_id: int):
+        """
+        Get all fields that correspond to a mask, specified by its id.
+        Fields are ordered by their index.
+        """
         async with get_session() as session:
             sqlfields_iterator = await session.scalars(
                 select(SQLMaskFields)
@@ -150,6 +154,10 @@ class Mask:
 
     @staticmethod
     async def get_by_owner(owner: discord.User|int, bot: Bot) -> list["Mask"]:
+        """
+        Gets all masks associated with a specific user.
+        The owner argument may be either a discord.User object or an int being the user id.
+        """
         if isinstance(owner,discord.User):
             owner_id = owner.id
         else:
