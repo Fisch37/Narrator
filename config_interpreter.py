@@ -21,6 +21,6 @@ def read_config(path: str) -> Config:
     """
     Loads the configuration out of (path) as a dictionary.
     """
-    with open(path,encoding="utf-8") as config_file:
+    with open(path,"rb") as config_file:
         # Not using ConfigParser.read for better error detection
         return tomllib.load(config_file)
