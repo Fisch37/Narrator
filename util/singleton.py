@@ -1,7 +1,9 @@
 """
 This module provides a Singleton base class that allows subclassing.
 """
-from typing import Self
+from typing import TypeVar
+
+Instance = TypeVar('Instance')
 
 class SingletonMeta(type):
     """
@@ -10,10 +12,10 @@ class SingletonMeta(type):
     """
     __instance_cache = {}
 
-    def __call__(cls, *args, **kwargs) -> Self:
-        if cls not in cls.__instance_cache:
-            cls.__instance_cache[cls] = super().__call__(*args,**kwargs)
-        return cls.__instance_cache[cls]
+    def __call__(cls: type[Instance], *args, **kwargs) -> Instance:
+        if cls not in SingletonMeta.__instance_cache:
+            SingletonMeta.__instance_cache[cls] = super().__call__(*args,**kwargs)
+        return SingletonMeta.__instance_cache[cls]
 
 class Singleton(metaclass=SingletonMeta):
     """
