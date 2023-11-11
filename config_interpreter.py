@@ -5,16 +5,14 @@ Exposes read_config and the Config TypedDict.
 import tomllib
 from typing import TypedDict
 
-class _DatabseConfig(TypedDict):
-    dialect: str
-    driver: str
-    path: str
+class _DatabaseConfig(TypedDict):
+    url: str
 
 class Config(TypedDict):
     """
     Typing for the configuration object.
     """
-    Database: _DatabseConfig
+    Database: _DatabaseConfig
 
 
 def read_config(path: str) -> Config:
@@ -23,4 +21,4 @@ def read_config(path: str) -> Config:
     """
     with open(path,"rb") as config_file:
         # Not using ConfigParser.read for better error detection
-        return tomllib.load(config_file)
+        return tomllib.load(config_file) # type: ignore
