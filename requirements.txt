@@ -2,3 +2,4 @@ discord.py
 sqlalchemy
 aiosqlite
 colorama
+pydantic
