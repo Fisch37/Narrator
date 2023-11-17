@@ -10,7 +10,7 @@ import discord
 from discord.ext.commands import Bot
 from sqlalchemy import select, update
 from pydantic import BaseModel, ConfigDict
-from data.sql.ormclasses import SQLMasks, SQLMaskFields
+from data.sql.ormclasses import Mask as SQLMask, MaskField as SQLMaskField
 from data.sql.engine import get_session
 from util import LimitedList
 from util.coroutine_tools import may_fetch_guild, may_fetch_member
@@ -34,7 +34,7 @@ class Field(BaseModel):
         """
         async with get_session() as session:
             await session.execute(
-                update(SQLMaskFields),
+                update(SQLMaskField),
                 self.model_dump(mode="json")
             )
             await session.commit()
@@ -48,15 +48,15 @@ class Field(BaseModel):
         """
         async with get_session() as session:
             await session.execute(
-                update(SQLMaskFields),
+                update(SQLMaskField),
                 [f.model_dump(mode="json") for f in fields]
             )
             await session.commit()
 
     @staticmethod
-    def from_sql(sqlfield: SQLMaskFields) -> "Field":
+    def from_sql(sqlfield: SQLMaskField) -> "Field":
         """
-        Converts an SQLMaskFields object into a Field object.
+        Converts an SQLSQLMaskFields object into a Field object.
         """
         return Field(
             id=sqlfield.id,
@@ -73,16 +73,16 @@ class Field(BaseModel):
         """
         async with get_session() as session:
             sqlfields_iterator = await session.scalars(
-                select(SQLMaskFields)
-                .where(SQLMaskFields.mask_id == mask_id)
-                .order_by(SQLMaskFields.index)
+                select(SQLMaskField)
+                .where(SQLMaskField.mask_id == mask_id)
+                .order_by(SQLMaskField.index)
             )
             return (
                 Field.from_sql(sqlfield)
                 for sqlfield in sqlfields_iterator
             )
 
-class Mask(BaseModel):
+class SQLMask(BaseModel):
     """
     High-level class for a single mask. (Webhook-Alias)
     Should store all information on a singular mask, when expanded.
@@ -112,7 +112,7 @@ class Mask(BaseModel):
             sqlvalues["owner"] = str(self.owner.id)
             sqlvalues["guild"] = str(self.owner.guild.id)
             await session.execute(
-                update(SQLMasks),
+                update(SQLMask),
                 sqlvalues
             )
             await session.commit()
@@ -145,12 +145,12 @@ class Mask(BaseModel):
 
     @staticmethod
     async def _from_sql(
-        sqlmask: SQLMasks,
+        sqlmask: SQLMask,
         fields: LimitedList[Field],
         /,
         owner: discord.Member,
-    ) -> "Mask":
-        return Mask(
+    ) -> "SQLMask":
+        return SQLMask(
             id=sqlmask.id,
             name=sqlmask.name,
             description=sqlmask.description,
@@ -161,14 +161,14 @@ class Mask(BaseModel):
 
     @staticmethod
     async def _from_sql_no_fields(
-        sqlmask: SQLMasks,
+        sqlmask: SQLMask,
         owner: discord.Member,
-    ) -> "Mask":
+    ) -> "SQLMask":
         fields = LimitedList(
             await Field.get_by_mask_id(mask_id=sqlmask.id),
             size=EMBED_MAX_FIELDS
         )
-        return await Mask._from_sql(
+        return await SQLMask._from_sql(
             sqlmask,
             fields,
             owner
@@ -176,42 +176,42 @@ class Mask(BaseModel):
 
     @staticmethod
     async def _from_sql_no_fields_or_discord_data(
-        sqlmask: SQLMasks,
+        sqlmask: SQLMask,
         bot: Bot
-    ) -> "Mask":
+    ) -> "SQLMask":
         guild = await may_fetch_guild(bot,int(sqlmask.guild))
         owner = await may_fetch_member(guild,int(sqlmask.owner))
-        return await Mask._from_sql_no_fields(
+        return await SQLMask._from_sql_no_fields(
             sqlmask,
             owner
         )
 
     @staticmethod
-    async def get_from_id(id_: int, bot: Bot) -> "Mask|None":
+    async def get_from_id(id_: int, bot: Bot) -> "SQLMask|None":
         """
         Gets a high-level Mask object with the id id_.
         Returns the newly created Mask object or None if not found.
         """
         async with get_session() as session:
-            sqlmask = await session.get(SQLMasks,id_)
+            sqlmask = await session.get(SQLMask,id_)
             if sqlmask is None:
                 return None
 
-            return await Mask._from_sql_no_fields_or_discord_data(
+            return await SQLMask._from_sql_no_fields_or_discord_data(
                 sqlmask,
                 bot
             )
 
     @overload
     @staticmethod
-    async def get_by_owner(owner: discord.Member) -> list["Mask"]: ...
+    async def get_by_owner(owner: discord.Member) -> list["SQLMask"]: ...
 
     @overload
     @staticmethod
-    async def get_by_owner(owner: int, bot: Bot) -> list["Mask"]: ...
+    async def get_by_owner(owner: int, bot: Bot) -> list["SQLMask"]: ...
 
     @staticmethod
-    async def get_by_owner(owner: discord.Member|int, bot: Bot|None=None) -> list["Mask"]:
+    async def get_by_owner(owner: discord.Member|int, bot: Bot|None=None) -> list["SQLMask"]:
         """
         Gets all masks associated with a specific user.
         The owner argument may be either a discord.User object or an int being the user id.
@@ -224,16 +224,16 @@ class Mask(BaseModel):
             owner_id = owner
         async with get_session() as session:
             sqlmasks_iterator = await session.scalars(
-                select(SQLMasks)
-                .where(SQLMasks.owner == str(owner_id))
+                select(SQLMask)
+                .where(SQLMask.owner == str(owner_id))
             )
             return await asyncio.gather(*(
                 (
-                    Mask._from_sql_no_fields(
+                    SQLMask._from_sql_no_fields(
                         sqlmask,
                         owner
                     ) if isinstance(owner,discord.Member)
-                    else Mask._from_sql_no_fields_or_discord_data(
+                    else SQLMask._from_sql_no_fields_or_discord_data(
                         sqlmask,
                         bot # type: ignore
                     )
@@ -242,12 +242,12 @@ class Mask(BaseModel):
             ))
 
     @staticmethod
-    async def new(owner: discord.Member) -> "Mask":
+    async def new(owner: discord.Member) -> "SQLMask":
         """
         Creates a new, empty Mask and stores it in the database.
         """
         async with get_session() as session:
-            sqlmask = SQLMasks(
+            sqlmask = SQLMask(
                 name="",
                 description="",
                 avatar_url=None,
@@ -256,4 +256,4 @@ class Mask(BaseModel):
             )
             session.add(sqlmask)
             await session.commit()
-        return await Mask._from_sql(sqlmask,LimitedList(),owner)
+        return await SQLMask._from_sql(sqlmask,LimitedList(),owner)

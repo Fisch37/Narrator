@@ -46,3 +46,12 @@ class LimitedList(list[T]):
 
     def __repr__(self) -> str:
         return f"LimitedList({self.size}@{list.__repr__(self)})"
+
+
+def make_LimitedList_subclass(size: int=-1, /, name: str="LimitedListX"):
+    class LimitedListX(LimitedList[T]):
+        def __init__(self, __iterable: Iterable[T] = ()):
+            super().__init__(__iterable, size)
+    # LimitedListX.__name__ = name
+
+    return LimitedListX

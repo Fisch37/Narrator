@@ -3,12 +3,16 @@ SQL Object Reference Models.
 Classes defined herein should **never** be imported outside of database
 code! **Outsourcing database interactions is required!**
 """
-from sqlalchemy import UniqueConstraint
-from sqlalchemy.orm import declarative_base, mapped_column, Mapped
+from sqlalchemy import ForeignKey, UniqueConstraint
+from sqlalchemy.orm import declarative_base, mapped_column, Mapped, relationship
+
+from util.limited_list import make_LimitedList_subclass
 
 Base = declarative_base()
+FieldsList = make_LimitedList_subclass(25, "FieldsList")
 
-class SQLMasks(Base):
+
+class Mask(Base):
     """
     SQL Data table for the masks.
     Includes every data content except the fields list, which is stored
@@ -25,8 +29,14 @@ class SQLMasks(Base):
     avatar_url: Mapped[str|None] = mapped_column()
     owner: Mapped[str] = mapped_column()
     guild: Mapped[str] = mapped_column()
+    fields: Mapped[FieldsList["MaskField"]] = relationship(  # type: ignore
+        order_by="MaskField.index",
+        lazy="joined",
+        
+    )
 
-class SQLMaskFields(Base):
+
+class MaskField(Base):
     """
     Table storing all fields. Each stored field has an id added to it
     to allow the ORM to read it. Otherwise, fields are tagged with their
@@ -35,7 +45,7 @@ class SQLMaskFields(Base):
     __tablename__ = "mask_fields"
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    mask_id: Mapped[int] = mapped_column()
+    mask_id: Mapped[int] = mapped_column(ForeignKey("masks.id"))
     index: Mapped[int] = mapped_column()
     name: Mapped[str] = mapped_column()
     value: Mapped[str] = mapped_column()
