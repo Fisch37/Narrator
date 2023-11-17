@@ -4,6 +4,7 @@ from typing import TypeVar
 
 T = TypeVar('T')
 
+
 class LimitedList(list[T]):
     """Mutable sequence with an upper bound on its size."""
     __slots__ = ("_size",)
@@ -13,7 +14,7 @@ class LimitedList(list[T]):
             __iterable: Iterable[T]=(),
             /,
             size: int=-1
-        ):
+    ):
         super().__init__(__iterable)
         self._size = size
 
@@ -42,7 +43,6 @@ class LimitedList(list[T]):
         the current length.
         """
         return self._size
-
 
     def __repr__(self) -> str:
         return f"LimitedList({self.size}@{list.__repr__(self)})"

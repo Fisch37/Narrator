@@ -11,6 +11,7 @@ from data.sql.ormclasses import Base
 
 LOGGER = logging.getLogger("data.sql.engine")
 
+
 class AsyncDatabase(Singleton):
     """
     Singleton for managing the database connection.
@@ -20,7 +21,7 @@ class AsyncDatabase(Singleton):
     def __init__(self, url: str|None=None):
         if url is None:
             raise RuntimeError("First-time constructor must specify url argument")
-        self._engine = asql.create_async_engine(url)
+        self._engine = asql.create_async_engine(url, echo=True)
         self._sessionmaker = asql.async_sessionmaker(
             self.engine,
             expire_on_commit=False
@@ -60,6 +61,7 @@ class AsyncDatabase(Singleton):
         self._opened = False
         await self.engine.dispose()
 
+
 def get_sessionmaker() -> asql.async_sessionmaker[asql.AsyncSession]:
     """
     Shorthand for getting a sessionmaker from the database manager.
@@ -69,6 +71,7 @@ def get_sessionmaker() -> asql.async_sessionmaker[asql.AsyncSession]:
     if not database.is_opened:
         LOGGER.warning("Got sessionmaker of unopened/closed engine!")
     return database.sessionmaker
+
 
 def get_session() -> asql.AsyncSession:
     """
