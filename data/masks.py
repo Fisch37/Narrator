@@ -82,7 +82,7 @@ class Field(BaseModel):
                 for sqlfield in sqlfields_iterator
             )
 
-class SQLMask(BaseModel):
+class Mask(BaseModel):
     """
     High-level class for a single mask. (Webhook-Alias)
     Should store all information on a singular mask, when expanded.
