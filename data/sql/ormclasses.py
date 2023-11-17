@@ -6,10 +6,10 @@ code! **Outsourcing database interactions is required!**
 from sqlalchemy import ForeignKey, UniqueConstraint
 from sqlalchemy.orm import declarative_base, mapped_column, Mapped, relationship
 
-from util.limited_list import make_LimitedList_subclass
+from util.limited_list import limited_list_class
 
 Base = declarative_base()
-FieldsList = make_LimitedList_subclass(25, "FieldsList")
+FieldsList = limited_list_class(25, "FieldsList")
 
 
 class Mask(Base):
