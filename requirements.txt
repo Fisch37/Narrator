@@ -3,3 +3,4 @@ sqlalchemy
 aiosqlite
 colorama
 pydantic
+typing_extensions

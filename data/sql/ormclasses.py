@@ -4,12 +4,24 @@ Classes defined herein should **never** be imported outside of database
 code! **Outsourcing database interactions is required!**
 """
 from sqlalchemy import ForeignKey, UniqueConstraint
-from sqlalchemy.orm import declarative_base, mapped_column, Mapped, relationship
+from sqlalchemy.orm import DeclarativeBase, mapped_column, Mapped, relationship
+from typing_extensions import Annotated
+
+from discord.ext.commands import Bot
+import discord
 
 from util.limited_list import limited_list_class
+from data.sql.type_decorators import HugeInt
+from util.coroutine_tools import may_fetch_guild, may_fetch_member
 
-Base = declarative_base()
 FieldsList = limited_list_class(25, "FieldsList")
+Snowflake = Annotated[int, "Snowflake"]
+
+
+class Base(DeclarativeBase):
+    type_annotation_map = {
+        Snowflake: HugeInt
+    }
 
 
 class Mask(Base):
@@ -27,13 +39,29 @@ class Mask(Base):
     name: Mapped[str] = mapped_column()
     description: Mapped[str] = mapped_column()
     avatar_url: Mapped[str|None] = mapped_column()
-    owner: Mapped[str] = mapped_column()
-    guild: Mapped[str] = mapped_column()
+    owner_id: Mapped[Snowflake] = mapped_column()
+    guild_id: Mapped[Snowflake] = mapped_column()
     fields: Mapped[FieldsList["MaskField"]] = relationship(  # type: ignore
         order_by="MaskField.index",
         lazy="joined",
-        
     )
+
+    async def may_fetch_owner(self, bot: Bot) -> discord.Member:
+        """
+        Attempts to get the owner of this mask.
+        If the owner is not stored in cache, this will issue an API request.
+        If the owner is not found by the API this will raise a discord exception.
+        """
+        guild = await self.may_fetch_guild(bot)
+        return await may_fetch_member(guild, self.owner_id)
+    
+    async def may_fetch_guild(self, bot: Bot) -> discord.Guild:
+        """
+        Attempts to get the guild of this mask.
+        If the guild is not stored in cache, this will issue an API request.
+        If the owner is not found by the API this will raise a discord exception.
+        """
+        return await may_fetch_guild(bot, self.guild_id)
 
 
 class MaskField(Base):
