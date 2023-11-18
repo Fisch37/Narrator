@@ -181,8 +181,8 @@ class Mask(BaseModel):
         sqlmask: SQLMask,
         bot: Bot
     ) -> "Mask":
-        guild = await may_fetch_guild(bot, int(sqlmask.guild))
-        owner = await may_fetch_member(guild, int(sqlmask.owner))
+        guild = await may_fetch_guild(bot, int(sqlmask.guild_id))
+        owner = await may_fetch_member(guild, int(sqlmask.owner_id))
         return await Mask._from_sql_no_fields(
             sqlmask,
             owner
@@ -229,7 +229,7 @@ class Mask(BaseModel):
         async with get_session() as session:
             sqlmasks_iterator = await session.scalars(
                 select(SQLMask)
-                .where(SQLMask.owner == str(owner_id))
+                .where(SQLMask.owner_id == str(owner_id))
             )
             return await asyncio.gather(*(
                 (
