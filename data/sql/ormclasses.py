@@ -61,6 +61,28 @@ class Mask(Base):
         If the owner is not found by the API this will raise a discord exception.
         """
         return await may_fetch_guild(bot, self.guild_id)
+    
+    async def to_embed(self, bot: Bot, embed: discord.Embed|None=None) -> discord.Embed:
+        owner = await self.may_fetch_owner(bot)
+        if embed is None:
+            embed = discord.Embed()
+        embed.title = self.name
+        embed.timestamp = discord.utils.utcnow()
+        embed.description = self.description
+        embed.set_author(
+            name=owner.display_name,
+            icon_url=owner.display_avatar.url
+        ).set_thumbnail(
+            url=self.avatar_url
+        ).clear_fields()
+        for field in self.fields:
+            embed.add_field(
+                name=field.name,
+                value=field.value,
+                inline=field.inline
+            )
+
+        return embed
 
 
 class MaskField(Base):
