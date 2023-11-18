@@ -37,7 +37,7 @@ class Mask(Base):
     fields: Mapped[FieldsList["MaskField"]] = relationship(  # type: ignore
         order_by="MaskField._index",
         lazy="immediate",
-        default_factory=lambda: FieldsList(),
+        default_factory=FieldsList,
         cascade="all, delete-orphan"
     )
 
@@ -90,13 +90,15 @@ class Mask(Base):
         """
         for i, field in enumerate(self.fields):
             field.mask_id = self.id
-            field._index = i
+            field.set_field_index(i)
         async with may_make_session(session) as session, session.begin() as transaction:
             session.add(self)
             await transaction.commit()
-            pass
 
     async def delete(self, *, session: AsyncSession|None=None):
+        """
+        Deletes this object and its field from the database.
+        """
         async with may_make_session(session) as session, session.begin() as transaction:
             await session.delete(self)
             await transaction.commit()
@@ -206,3 +208,10 @@ class MaskField(Base):
             name="list_position_uniqueness"
         ),
     )
+
+    def set_field_index(self, index: int) -> None:
+        """
+        Updates the _index value of this object.
+        This should not be used outside of database operations.
+        """
+        self._index = index
