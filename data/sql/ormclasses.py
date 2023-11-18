@@ -10,14 +10,15 @@ from typing_extensions import Annotated
 from discord.ext.commands import Bot
 import discord
 
-from util.limited_list import FieldsList
 from data.sql.type_decorators import HugeInt
+from util.limited_list import FieldsList
 from util.coroutine_tools import may_fetch_guild, may_fetch_member
 
 Snowflake = Annotated[int, "Snowflake"]
 
 
 class Base(DeclarativeBase):
+    """Base class for declarative SQL classes found below."""
     type_annotation_map = {
         Snowflake: HugeInt
     }
@@ -63,6 +64,10 @@ class Mask(Base):
         return await may_fetch_guild(bot, self.guild_id)
     
     async def to_embed(self, bot: Bot, embed: discord.Embed|None=None) -> discord.Embed:
+        """
+        Updates the embed passed in with the mask data.
+        If `embed` is None, creates a new embed instead.
+        """
         owner = await self.may_fetch_owner(bot)
         if embed is None:
             embed = discord.Embed()
