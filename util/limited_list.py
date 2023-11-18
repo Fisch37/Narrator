@@ -48,10 +48,7 @@ class LimitedList(list[T]):
         return f"LimitedList({self.size}@{list.__repr__(self)})"
 
 
-def limited_list_class(size: int=-1, /, name: str="LimitedListX"):
-    class LimitedListX(LimitedList[T]):
-        def __init__(self, __iterable: Iterable[T] = ()):
-            super().__init__(__iterable, size)
-    LimitedListX.__name__ = name
-
-    return LimitedListX
+class FieldsList(LimitedList[T]):
+    """Specialized version of LimitedList. Has a fixed size of 25"""
+    def __init__(self, __iterable: Iterable[T] = (), /):
+        super().__init__(__iterable, 25)

@@ -10,11 +10,10 @@ from typing_extensions import Annotated
 from discord.ext.commands import Bot
 import discord
 
-from util.limited_list import limited_list_class
+from util.limited_list import FieldsList
 from data.sql.type_decorators import HugeInt
 from util.coroutine_tools import may_fetch_guild, may_fetch_member
 
-FieldsList = limited_list_class(25, "FieldsList")
 Snowflake = Annotated[int, "Snowflake"]
 
 
