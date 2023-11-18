@@ -3,25 +3,17 @@ SQL Object Reference Models.
 Classes defined herein should **never** be imported outside of database
 code! **Outsourcing database interactions is required!**
 """
-from sqlalchemy import ForeignKey, UniqueConstraint
-from sqlalchemy.orm import DeclarativeBase, mapped_column, Mapped, relationship
-from typing_extensions import Annotated
+from typing import overload
+from sqlalchemy import ForeignKey, UniqueConstraint, select
+from sqlalchemy.orm import mapped_column, Mapped, relationship
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from discord.ext.commands import Bot
 import discord
+from data.sql.engine import may_make_session, Base, Snowflake
 
-from data.sql.type_decorators import HugeInt
 from util.limited_list import FieldsList
 from util.coroutine_tools import may_fetch_guild, may_fetch_member
-
-Snowflake = Annotated[int, "Snowflake"]
-
-
-class Base(DeclarativeBase):
-    """Base class for declarative SQL classes found below."""
-    type_annotation_map = {
-        Snowflake: HugeInt
-    }
 
 
 class Mask(Base):
@@ -34,16 +26,19 @@ class Mask(Base):
 
     id: Mapped[int] = mapped_column(
         primary_key=True,
-        autoincrement=True
+        autoincrement=True,
+        init=False
     )
     name: Mapped[str] = mapped_column()
-    description: Mapped[str] = mapped_column()
-    avatar_url: Mapped[str|None] = mapped_column()
     owner_id: Mapped[Snowflake] = mapped_column()
     guild_id: Mapped[Snowflake] = mapped_column()
+    description: Mapped[str] = mapped_column(default="")
+    avatar_url: Mapped[str|None] = mapped_column(default=None)
     fields: Mapped[FieldsList["MaskField"]] = relationship(  # type: ignore
-        order_by="MaskField.index",
-        lazy="joined",
+        order_by="MaskField._index",
+        lazy="immediate",
+        default_factory=lambda: FieldsList(),
+        cascade="all, delete-orphan"
     )
 
     async def may_fetch_owner(self, bot: Bot) -> discord.Member:
@@ -89,6 +84,99 @@ class Mask(Base):
 
         return embed
 
+    async def update(self, *, session: AsyncSession|None=None):
+        """
+        Updates this object's representation within the database.
+        """
+        for i, field in enumerate(self.fields):
+            field.mask_id = self.id
+            field._index = i
+        async with may_make_session(session) as session, session.begin() as transaction:
+            session.add(self)
+            await transaction.commit()
+            pass
+
+    async def delete(self, *, session: AsyncSession|None=None):
+        async with may_make_session(session) as session, session.begin() as transaction:
+            await session.delete(self)
+            await transaction.commit()
+    
+    @staticmethod
+    async def new(
+        *,
+        name: str,
+        owner: discord.Member,
+        session: AsyncSession|None=None,
+        **kwargs
+    ) -> "Mask":
+        """
+        Creates a new Mask object with the default attributes and the owner
+        given as an argument. The object will immediately be commited
+        to the database.
+        """
+        obj = Mask(
+            name=name,
+            owner_id=owner.id,
+            guild_id=owner.guild.id,
+            **kwargs
+        )
+        async with may_make_session(session) as session:
+            async with session.begin() as transaction:
+                session.add(obj)
+                await transaction.commit()
+        return obj
+    
+    @staticmethod
+    async def get(id_: int, *, session: AsyncSession|None=None) -> "Mask|None":
+        """
+        Gets the Mask with the specified id from the database.
+        Returns None if not found.
+        """
+        async with may_make_session(session) as session:
+            return await session.get(Mask, id_)
+    
+    @overload
+    @staticmethod
+    async def get_by_owner_and_guild(
+        owner: discord.Member,
+        *,
+        session: AsyncSession|None=None
+    ) -> list["Mask"]:
+        ...
+
+    @overload
+    @staticmethod
+    async def get_by_owner_and_guild(
+        owner: int,
+        guild_id: int,
+        *,
+        session: AsyncSession|None=None
+    ) -> list["Mask"]:
+        ...
+
+    @staticmethod
+    async def get_by_owner_and_guild(
+        owner: int|discord.Member,
+        guild_id: int|None=None,
+        *,
+        session: AsyncSession|None=None
+    ) -> list["Mask"]:
+        """
+        Gets all masks owned by the `owner` within the specified guild.
+        Accepts a `discord.Member` argument in replacement of `guild_id`.
+        """
+        if isinstance(owner, discord.Member):
+            owner_id = owner.id
+            guild_id = owner.guild.id
+        else:
+            owner_id = owner
+        async with may_make_session(session) as session:
+            result = await session.scalars(
+                select(Mask)
+                .where(Mask.owner_id == owner_id and Mask.guild_id == guild_id)  # type: ignore
+            )
+            return list(result.all())
+
 
 class MaskField(Base):
     """
@@ -98,9 +186,15 @@ class MaskField(Base):
     """
     __tablename__ = "mask_fields"
 
-    id: Mapped[int] = mapped_column(primary_key=True)
-    mask_id: Mapped[int] = mapped_column(ForeignKey("masks.id"))
-    index: Mapped[int] = mapped_column()
+    id: Mapped[int] = mapped_column(
+        primary_key=True,
+        init=False
+    )
+    mask_id: Mapped[int] = mapped_column(
+        ForeignKey("masks.id"),
+        init=False
+    )
+    _index: Mapped[int] = mapped_column(init=False)
     name: Mapped[str] = mapped_column()
     value: Mapped[str] = mapped_column()
     inline: Mapped[bool] = mapped_column()
@@ -108,7 +202,7 @@ class MaskField(Base):
     __table_args__ = (
         UniqueConstraint(
             "mask_id",
-            "index",
+            "_index",
             name="list_position_uniqueness"
         ),
     )

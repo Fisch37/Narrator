@@ -3,11 +3,15 @@ Provides something called TypeDecorators, which serve
 as middleware between the database and python.
 In more complicated code layouts these allow for custom
 logic to transform column data into a python object.
+
+Also provides type aliases to allow easier use of these type decorators
 """
 
-from typing import Any
+from typing import Annotated, Any
 from sqlalchemy.engine.interfaces import Dialect
 import sqlalchemy.types as types
+
+Snowflake = Annotated[int, "Snowflake"]
 
 
 class HugeInt(types.TypeDecorator[int]):

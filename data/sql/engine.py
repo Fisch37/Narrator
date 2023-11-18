@@ -5,11 +5,19 @@ Implements the AsyncDatabase singleton to allow easy management of the engine.
 from typing import Self
 import logging
 import sqlalchemy.ext.asyncio as asql
+from sqlalchemy.orm import DeclarativeBase, MappedAsDataclass
+from data.sql.type_decorators import HugeInt, Snowflake
 
 from util import Singleton
-from data.sql.ormclasses import Base
 
 LOGGER = logging.getLogger("data.sql.engine")
+
+
+class Base(MappedAsDataclass, DeclarativeBase):
+    """Base class for declarative SQL classes found below."""
+    type_annotation_map = {
+        Snowflake: HugeInt
+    }
 
 
 class AsyncDatabase(Singleton):
@@ -80,3 +88,24 @@ def get_session() -> asql.AsyncSession:
     Issues a warning when getting the sessionmaker from an unopened engine.
     """
     return get_sessionmaker()()
+
+
+class may_make_session:
+    """
+    Context manager that guarantees the returning of a session.
+    This allows functions or methods that may accept a session
+    to generate one if necessary.
+    If a new session was created this helper will close it at exit.
+    """
+    def __init__(self, session: asql.AsyncSession|None):
+        self._session = session
+        self._creates_session = session is None
+    
+    async def __aenter__(self) -> asql.AsyncSession:
+        if self._creates_session:
+            self._session = get_session()
+        return self._session  # type: ignore
+    
+    async def __aexit__(self, exc, exc_type, traceback) -> None:
+        if self._creates_session:
+            await self._session.close()  # type: ignore
