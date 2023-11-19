@@ -13,7 +13,8 @@ extend-ignore=
     W293
 
 per-file-ignores=
-    */__init__.py:F401
+    data/**/__init__.py:F401
+    util/**/__init__.py:F401
 
 max-line-length=100
 
