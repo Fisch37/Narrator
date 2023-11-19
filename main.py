@@ -48,6 +48,10 @@ config = read_config(CONFIG_PATH)
 
 
 async def load_extension_task(extension: str):
+    """
+    Loads an extension surrounded by adequate logging.
+    Also safely logs a failed extension load
+    """
     try:
         await bot.load_extension(extension)
     except commands.ExtensionError as e:
