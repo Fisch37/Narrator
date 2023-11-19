@@ -16,7 +16,7 @@ from data import AsyncDatabase
 TOKEN_PATH = "token"
 CONFIG_PATH = "config.toml"
 EXTENSIONS = (
-
+    "extensions.masks",
 )
 
 

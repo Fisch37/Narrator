@@ -1,6 +1,6 @@
 """
-Exposes a single function "setup_logging" that initialises the logger
-for a 
+Exposes a single function "setup_logging" that initialises the logger.
+This logger outputs into a queue and splits output into stdout and a log file.
 """
 from logging import Formatter, StreamHandler, FileHandler
 from logging.handlers import QueueHandler, QueueListener
@@ -10,13 +10,14 @@ from pathlib import Path
 from discord.utils import setup_logging as discord_logging, _ColourFormatter, utcnow
 from colorama.ansi import Fore, Style
 
-DEFAULT_FORMATTER = "["+Fore.BLACK+"%(asctime)s {colour}%(levelname)-8s"\
-    +Style.RESET_ALL+"] "+Style.BRIGHT+Fore.MAGENTA+"%(threadName)s@%(name)s: "\
-    +Style.RESET_ALL+"%(message)s"
+DEFAULT_FORMATTER = "[" + Fore.BLACK + "%(asctime)s {colour}%(levelname)-8s"\
+    + Style.RESET_ALL + "] " + Style.BRIGHT + Fore.MAGENTA + "%(threadName)s@%(name)s: "\
+    + Style.RESET_ALL + "%(message)s"
 
 __all__ = (
     "setup_logging",
 )
+
 
 class _CustomColouredFormatter(_ColourFormatter):
     FORMATS = {
@@ -27,15 +28,17 @@ class _CustomColouredFormatter(_ColourFormatter):
         for level, colour in _ColourFormatter.LEVEL_COLOURS
     }
 
+
 STDERR_FORMATTER = _CustomColouredFormatter()
 FILE_FORMATTER = Formatter(
     "[%(asctime)s %(levelname)-8s] %(threadName)s@%(name)s: %(message)s"
 )
 
+
 def setup_logging(
         stderr_level: int|str=20,
         file_level: int|str=10
-    ):
+):
     """
     Initialises the default logger to use some relevant info.
     Uses a queue-based logger to avoid blocking behaviour in uncertain
@@ -48,8 +51,8 @@ def setup_logging(
     stderr_handler.setFormatter(STDERR_FORMATTER)
     stderr_handler.setLevel(stderr_level)
     # File Output
-    filepath = Path("logs",utcnow().strftime("%Y-%m-%d+%H-%M-%S")+".log")
-    filepath.parent.mkdir(parents=True,exist_ok=True)
+    filepath = Path("logs", utcnow().strftime("%Y-%m-%d+%H-%M-%S") + ".log")
+    filepath.parent.mkdir(parents=True, exist_ok=True)
     file_handler = FileHandler(
         filepath,
         encoding="utf-8"
@@ -67,6 +70,6 @@ def setup_logging(
 
     discord_logging(
         level=0,
-        formatter=None,
+        formatter=None,  # type: ignore
         handler=queue_handler
     )

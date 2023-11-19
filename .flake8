@@ -1,0 +1,22 @@
+[flake8]
+# According to default ignore rules, this should result in the following ignores:
+# E704, E252, W503
+extend-select=
+    E121
+    E123
+    E126
+    E226
+extend-ignore=
+    E252
+    # E227 is disabled because it detects | as a union operator. (e.g. int|None)
+    E227
+    W293
+
+per-file-ignores=
+    */__init__.py:F401
+
+max-line-length=100
+
+
+exclude=
+    venv/**
