@@ -47,6 +47,15 @@ bot = commands.Bot("/", intents=intents)
 config = read_config(CONFIG_PATH)
 
 
+async def load_extension_task(extension: str):
+    try:
+        await bot.load_extension(extension)
+    except commands.ExtensionError as e:
+        logging.error("Failed to load extension %s! (%s)", extension, e)
+    else:
+        logging.info("Loaded extension %s", extension)
+
+
 @bot.event
 async def on_ready():
     """Called when the bot is ready to interact with the world."""
@@ -59,7 +68,7 @@ async def main():
         async with asyncio.TaskGroup() as tg:
             for extension in EXTENSIONS:
                 tg.create_task(
-                    bot.load_extension(extension),
+                    load_extension_task(extension),
                     name=f"Loading Extension {extension}"
                 )
 
