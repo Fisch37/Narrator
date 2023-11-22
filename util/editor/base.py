@@ -36,16 +36,18 @@ class EditorPage(ui.View):
 
         return super().__init_subclass__()
     
-    async def update(self):
+    async def update(self): ...
+    
+    async def update_message(self):
         if self.message is None:
-            LOGGER.warn("EditorPage.update called without set message!")
+            LOGGER.warn("EditorPage.update_message called without set message!")
             return
         await self.message.edit(embed=self.embed, view=self)
     
     async def set_component_state(self, state: bool):
         for item in self.children:
             item.disabled = state  # type: ignore
-        await self.update()
+        await self.update_message()
 
 
 class disable_when_processing(Generic[T, *Ts]):
@@ -72,10 +74,10 @@ class disable_when_processing(Generic[T, *Ts]):
                 # This does not allow inner functions to disable items however.
                 self.disabled_items.append(item)
             item.disabled = True  # type: ignore
-        await self.editor.update()
+        await self.editor.update_message()
 
     async def __aexit__(self, exc, exc_type, traceback) -> None:
         for item in self.disabled_items:
             item.disabled = False
         self.disabled_items.clear()
-        await self.editor.update()
+        await self.editor.update_message()
