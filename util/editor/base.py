@@ -1,35 +1,17 @@
-from typing import Any, Callable, Coroutine, TypeVar
-from discord import Interaction, ui
-from discord.ui.item import ItemCallbackType
-import functools
+from inspect import iscoroutinefunction
+from typing import Any, Callable, Coroutine, Generic, TypeVar, TypeVarTuple
+from logging import getLogger
+from discord import ui
 import discord
+
+LOGGER = getLogger("util.editor.base")
 
 MAXIMUM_ROW_CONTENT = 5
 MAXIMUM_ROW_WITH_SELECT = 1
 MAXIMUM_ROW_COUNT = 5
 
-V = TypeVar('V', bound=ui.View)
-ButtonCallbackType = ItemCallbackType[V, ui.Button[V]]
-
-
-@functools.wraps(ui.button)
-def button(*args, **kwargs):
-    discord_decorator = ui.button(*args, **kwargs)
-    
-    def decorator(func: ButtonCallbackType) -> ButtonCallbackType:
-        # discord.py _says_ they return a ui.Button object with this decorator.
-        # They don't. They just annotate the function with magic attributes
-        # and overwrite the definition in their __init_subclass__.
-        # This is probably done to appease type checkers but it also sucks
-        # because it leaves me having to find these things out by reading the source.
-        # (also it misleads people about the true nature of the code)
-        # What do I think they should've done? Really just do what they say they do
-        # and override using a custom class. Much easier to build upon as well.
-        # With this solution I need to emulate what they do so I don't break things.
-        decorated_func: ButtonCallbackType = discord_decorator(func)  # type: ignore
-        decorated_func.__is_editor_function__ = True
-        return decorated_func
-    return decorator
+Ts = TypeVarTuple('Ts')
+T = TypeVar('T')
 
 
 class EditorPage(ui.View):
@@ -53,3 +35,47 @@ class EditorPage(ui.View):
         cls.timeout = timeout
 
         return super().__init_subclass__()
+    
+    async def update(self):
+        if self.message is None:
+            LOGGER.warn("EditorPage.update called without set message!")
+            return
+        await self.message.edit(embed=self.embed, view=self)
+    
+    async def set_component_state(self, state: bool):
+        for item in self.children:
+            item.disabled = state  # type: ignore
+        await self.update()
+
+
+class disable_when_processing(Generic[T, *Ts]):
+    def __init__(self, func: Callable[["EditorPage", *Ts], Coroutine[Any, Any, T]]):
+        if not iscoroutinefunction(func):
+            raise ValueError("disable_when_processing decorator requires coroutine function!")
+        self.func = func
+        self.disabled_items = []
+        self.editor: "EditorPage"
+    
+    async def __call__(self, editor: "EditorPage", *args: *Ts, **kwargs) -> T:
+        self.editor = editor
+        async with self:
+            return await self.func(editor, *args, **kwargs)
+    
+    async def __aenter__(self) -> None:
+        # Every possible item that we care about has a disabled attribute.
+        # Not ui.Item itself though because weirdness.
+        for item in self.editor.children:
+            if not item.disabled:  # type: ignore
+                # Stores a reference to all items that were disabled by this context manager
+                # Storing these allows the user to disable components manually
+                # and for us to preserve these changes.
+                # This does not allow inner functions to disable items however.
+                self.disabled_items.append(item)
+            item.disabled = True  # type: ignore
+        await self.editor.update()
+
+    async def __aexit__(self, exc, exc_type, traceback) -> None:
+        for item in self.disabled_items:
+            item.disabled = False
+        self.disabled_items.clear()
+        await self.editor.update()
