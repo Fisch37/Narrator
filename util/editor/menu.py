@@ -7,7 +7,7 @@ from util.editor.hierarchy import ChildPage, ParentPage
 
 LOGGER = getLogger("util.editor.menu")
 
-SubmenuPage_co = TypeVar('SubmenuPage_co', bound="SubmenuPage")
+SubmenuPage_co = TypeVar('SubmenuPage_co', bound="SubmenuPage", covariant=True)
 
 
 class _MenuSelect(ui.Select):
@@ -101,12 +101,12 @@ class SubmenuPage(ChildPage):
         )
     
     @discord.ui.button(label="Back", row=4)
-    async def _back_to_parent(self, interaction: discord.Interaction, button):
+    async def _back_to_parent(self, interaction: discord.Interaction, _):
         await interaction.response.defer()
         await self.switch_to_parent()
     
     @discord.ui.button(label="Back to top", row=4)
-    async def _back_to_top(self, interaction: discord.Interaction, button):
+    async def _back_to_top(self, interaction: discord.Interaction, _):
         await interaction.response.defer()
         # Inverse hierarchy traversal
         # Algorithmical but can be done synchronously, because it takes no time at all.

@@ -2,8 +2,8 @@ from typing import Generic, TypeVar
 import discord
 from util.editor.base import EditorPage
 
-SwitchablePage_co = TypeVar('SwitchablePage_co', bound="SwitchablePage")
-ChildPage_co = TypeVar('ChildPage_co', bound="ChildPage")
+SwitchablePage_co = TypeVar('SwitchablePage_co', bound="SwitchablePage", covariant=True)
+ChildPage_co = TypeVar('ChildPage_co', bound="ChildPage", covariant=True)
 
 
 class SwitchablePage(EditorPage):
@@ -42,7 +42,7 @@ class ParentPage(SwitchablePage, Generic[ChildPage_co]):
         self._child_instances: dict[type[ChildPage_co], ChildPage_co] = {}
         super().__init__(message, embed)
     
-    async def switch_to_child(self, child_type: type[ChildPage_co]) -> ChildPage_co:
+    async def switch_to_child(self, child_type: type[ChildPage_co]) -> ChildPage_co:  # type: ignore
         try:
             child_object = self._child_instances[child_type]
         except KeyError:

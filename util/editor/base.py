@@ -48,7 +48,7 @@ class EditorPage(ui.View):
     
     async def update_message(self):
         if self.message is None:
-            LOGGER.warn("EditorPage.update_message called without set message!")
+            LOGGER.warning("EditorPage.update_message called without set message!")
             return
         await self.message.edit(
             content=None if type(self).resets_message_content else MISSING,
