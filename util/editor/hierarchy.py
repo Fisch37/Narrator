@@ -36,7 +36,7 @@ class ChildPage(SwitchablePage):
 
 
 class ParentPage(SwitchablePage, Generic[ChildPage_co]):
-    CHILDREN: tuple[ChildPage_co, ...]
+    CHILDREN: tuple[type[ChildPage_co], ...]
 
     def __init__(self, message: discord.Message|None=None, embed: discord.Embed|None=None):
         self._child_instances: dict[type[ChildPage_co], ChildPage_co] = {}
