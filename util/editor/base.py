@@ -2,6 +2,7 @@ from inspect import iscoroutinefunction
 from typing import Any, Callable, Coroutine, Generic, TypeVar, TypeVarTuple
 from logging import getLogger
 from discord import ui
+from discord.utils import MISSING
 import discord
 
 LOGGER = getLogger("util.editor.base")
@@ -21,6 +22,7 @@ class EditorPage(ui.View):
     An editor page also keeps reference to a message which is where it appears as a View object.
     """
     timeout: float|None
+    resets_message_content: bool
 
     def __init__(
         self,
@@ -31,8 +33,14 @@ class EditorPage(ui.View):
         self.embed = embed
         super().__init__(timeout=type(self).timeout)
     
-    def __init_subclass__(cls, *, timeout: float|None=180) -> None:
+    def __init_subclass__(
+        cls,
+        *,
+        timeout: float|None=180,
+        resets_message_content: bool=False
+    ) -> None:
         cls.timeout = timeout
+        cls.resets_message_content = resets_message_content
 
         return super().__init_subclass__()
     
@@ -42,7 +50,11 @@ class EditorPage(ui.View):
         if self.message is None:
             LOGGER.warn("EditorPage.update_message called without set message!")
             return
-        await self.message.edit(embed=self.embed, view=self)
+        await self.message.edit(
+            content=None if type(self).resets_message_content else MISSING,
+            embed=self.embed,
+            view=self
+        )
     
     async def set_component_state(self, state: bool):
         for item in self.children:
