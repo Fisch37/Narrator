@@ -11,6 +11,7 @@ extend-ignore=
     # E227 is disabled because it detects | as a union operator. (e.g. int|None)
     E227
     W293
+    E701
 
 per-file-ignores=
     data/**/__init__.py:F401
