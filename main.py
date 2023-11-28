@@ -20,6 +20,19 @@ EXTENSIONS = (
 )
 
 
+class CustomBot(commands.Bot):
+    async def setup_hook(self) -> None:
+        guild_id: int = config["Bot"]["debug_guild"]
+        guild = discord.Object(guild_id) if guild_id > 0 else None
+        if guild is not None:
+            logging.info("Debug guild is enabled! Set to %d", guild_id)
+            self.tree.copy_global_to(guild=guild)
+        await self.tree.sync(guild=guild)
+        await self.tree.fetch_commands(guild=guild)
+        logging.info("Synced commands!")
+        return await super().setup_hook()
+
+
 def read_token():
     """
     Reads in the bot token from the file specified in TOKEN_PATH
@@ -43,7 +56,7 @@ def read_token():
 
 setup_logging()
 intents = discord.Intents.default()
-bot = commands.Bot("/", intents=intents)
+bot = CustomBot("/", intents=intents)
 config = read_config(CONFIG_PATH)
 
 

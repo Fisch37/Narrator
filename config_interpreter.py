@@ -10,11 +10,16 @@ class _DatabaseConfig(TypedDict):
     url: str
 
 
+class _BotConfig(TypedDict):
+    debug_guild: int
+
+
 class Config(TypedDict):
     """
     Typing for the configuration object.
     """
     Database: _DatabaseConfig
+    Bot: _BotConfig
 
 
 def read_config(path: str) -> Config:
