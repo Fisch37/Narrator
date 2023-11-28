@@ -13,6 +13,23 @@ MAXIMUM_ROW_COUNT = 5
 
 Ts = TypeVarTuple('Ts')
 T = TypeVar('T')
+P = ParamSpec('P')
+GenericCoroutineFunction = Callable[P, Coroutine[Any, Any, T]]
+
+
+def _wraps_update(
+    editor: "EditorPage",
+    func: GenericCoroutineFunction
+) -> GenericCoroutineFunction:
+    @functools.wraps(func)
+    async def wrapper(*args, **kwargs):
+        response = await func(*args, **kwargs)
+        if not func.__editor_disable_update__:
+            await editor.update()
+        if not func.__editor_disable_message_update__:
+            await editor.update_message()
+        return response
+    return wrapper
 
 
 class EditorPage(ui.View):
@@ -32,6 +49,9 @@ class EditorPage(ui.View):
         self.message = message
         self.embed = embed
         super().__init__(timeout=type(self).timeout)
+        # Inject post-interaction editor updates.
+        for item in self.children:
+            item.callback = _wraps_update(self, item.callback)
     
     def __init_subclass__(
         cls,
@@ -93,3 +113,19 @@ class disable_when_processing(Generic[T, *Ts]):
             item.disabled = False
         self.disabled_items.clear()
         await self.editor.update_message()
+
+
+def disable_update(
+    func: GenericCoroutineFunction|None=None,
+    *,
+    disable_update: bool=True,
+    disable_message_update: bool=False
+) -> GenericCoroutineFunction|Callable[[GenericCoroutineFunction], GenericCoroutineFunction]:
+    def decorator(decorator_func: GenericCoroutineFunction) -> GenericCoroutineFunction:
+        decorator_func.__editor_disable_update__ = disable_update
+        decorator_func.__editor_disable_message_update__ = disable_message_update
+        return decorator_func
+    if func is None:
+        return decorator
+    else:
+        return decorator(func)
