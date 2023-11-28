@@ -12,6 +12,7 @@ class _DatabaseConfig(TypedDict):
 
 class _BotConfig(TypedDict):
     debug_guild: int
+    translations: str
 
 
 class Config(TypedDict):

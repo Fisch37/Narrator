@@ -12,6 +12,7 @@ from discord.ext import commands
 from logger_setup import setup_logging
 from config_interpreter import read_config
 from data import AsyncDatabase
+from translation_file_manager import FileSourcedTranslation
 
 TOKEN_PATH = "token"
 CONFIG_PATH = "config.toml"
@@ -22,6 +23,8 @@ EXTENSIONS = (
 
 class CustomBot(commands.Bot):
     async def setup_hook(self) -> None:
+        await self.tree.set_translator(FileSourcedTranslation(config["Bot"]["translations"]))
+
         guild_id: int = config["Bot"]["debug_guild"]
         guild = discord.Object(guild_id) if guild_id > 0 else None
         if guild is not None:

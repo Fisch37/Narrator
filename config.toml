@@ -3,3 +3,4 @@ url = "sqlite+aiosqlite:///database.db"
 
 [Bot]
 debug_guild=734461254747553823
+translations="translations"

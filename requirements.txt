@@ -4,3 +4,4 @@ aiosqlite
 colorama
 pydantic
 typing_extensions
+aiofiles
