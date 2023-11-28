@@ -6,6 +6,7 @@ from logging import Formatter, StreamHandler, FileHandler
 from logging.handlers import QueueHandler, QueueListener
 from queue import Queue
 from pathlib import Path
+from sys import gettrace
 
 from discord.utils import setup_logging as discord_logging, _ColourFormatter, utcnow
 from colorama.ansi import Fore, Style
@@ -35,9 +36,16 @@ FILE_FORMATTER = Formatter(
 )
 
 
+def _is_debugging():
+    """Checks if the program has an attached debugger"""
+    return gettrace() is not None
+
+
 def setup_logging(
         stderr_level: int|str=20,
-        file_level: int|str=10
+        file_level: int|str=10,
+        *,
+        debug_stderr_level: int|str=10
 ):
     """
     Initialises the default logger to use some relevant info.
@@ -49,7 +57,11 @@ def setup_logging(
     # Console Output (Coloured)
     stderr_handler = StreamHandler()
     stderr_handler.setFormatter(STDERR_FORMATTER)
-    stderr_handler.setLevel(stderr_level)
+    stderr_handler.setLevel(
+        debug_stderr_level
+        if _is_debugging()
+        else stderr_level
+    )
     # File Output
     filepath = Path("logs", utcnow().strftime("%Y-%m-%d+%H-%M-%S") + ".log")
     filepath.parent.mkdir(parents=True, exist_ok=True)

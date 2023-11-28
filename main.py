@@ -69,6 +69,7 @@ async def load_extension_task(extension: str):
         await bot.load_extension(extension)
     except commands.ExtensionError as e:
         logging.error("Failed to load extension %s! (%s)", extension, e)
+        logging.debug(e, exc_info=True)
     else:
         logging.info("Loaded extension %s", extension)
 
