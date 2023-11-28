@@ -45,6 +45,16 @@ class MenuPage(ParentPage[SubmenuPage_co], Generic[SubmenuPage_co]):
     submenu_placeholder: str|None
 
     def __init__(self, message: discord.Message|None=None, embed: discord.Embed|None=None):
+        super().__init__(message, embed)
+        # There's some dark magic going on here.
+        # Since the @disable_update decorator isn't applied to _MenuSelect.callback,
+        # you might think the callback also executes an editor update afterwards. It does not.
+        #
+        # Since we initialised _before_ this code here,
+        # the wrapper in EditorPage was already called.
+        # This means that this component doesn't get wrapped even though it looks like it should.
+        # PSA: Don't do this. Always call super().__init__ at the end when working with this.
+        #      Otherwise expect your editor updates to be completely insane.
         self.CHILDREN_SELECT = _MenuSelect(
             self,
             placeholder=type(self).submenu_placeholder,
@@ -61,7 +71,6 @@ class MenuPage(ParentPage[SubmenuPage_co], Generic[SubmenuPage_co]):
             ]
         )
         self.add_item(self.CHILDREN_SELECT)
-        super().__init__(message, embed)
 
     def __init_subclass__(
         cls,
