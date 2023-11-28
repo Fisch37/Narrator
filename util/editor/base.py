@@ -1,8 +1,9 @@
 from inspect import iscoroutinefunction
-from typing import Any, Callable, Coroutine, Generic, TypeVar, TypeVarTuple
+from typing import Any, Callable, Coroutine, Generic, ParamSpec, TypeVar, TypeVarTuple
 from logging import getLogger
 from discord import ui
 from discord.utils import MISSING
+import functools
 import discord
 
 LOGGER = getLogger("util.editor.base")
@@ -36,7 +37,12 @@ class EditorPage(ui.View):
     """
     This class represents a single menu for an editor.
     It inherits from `discord.ui.View`.
-    An editor page also keeps reference to a message which is where it appears as a View object.
+    An editor page also keeps reference to a message, which is where it appears as a View object.
+    An embed may also be stored inside this object for further editing.
+
+    Note: When overriding the __init__ magic method, the super call should be placed last!
+    Do not mess with this unless you know what you are doing. An early __init__ call may result
+    in broken callbacks and other anomalies!
     """
     timeout: float|None
     resets_message_content: bool
@@ -64,9 +70,28 @@ class EditorPage(ui.View):
 
         return super().__init_subclass__()
     
-    async def update(self): ...
+    async def update(self):
+        """
+        Responsible for updating this objects settings and embed content.
+        By default, will be called after every finished message component interaction,
+        but before `update_message`.
+
+        Subclasses should override this method.
+        """
     
     async def update_message(self):
+        """
+        This method updates the editor message and is called just after `update`.
+        If the `reset_message_content` option was enabled on subclassing, it will also
+        clear the message content.
+
+        Overriding the class is legal, but overriding `update` instead should be considered.
+        Note that certain decorators may result in this method being called more often than
+        expected. There is no guarantee to the call-scheduling of this method.
+
+        For components that are annotated via the `@disable_update` decorator, this method
+        will still be called by default.
+        """
         if self.message is None:
             LOGGER.warning("EditorPage.update_message called without set message!")
             return
@@ -77,12 +102,26 @@ class EditorPage(ui.View):
         )
     
     async def set_component_state(self, state: bool):
+        """
+        Sets all children of this view to have the passed disabled state.
+        Note that `True` means all items will be disabled.
+
+        Also calls `update_message`.
+        """
         for item in self.children:
             item.disabled = state  # type: ignore
         await self.update_message()
 
 
 class disable_when_processing(Generic[T, *Ts]):
+    """
+    Decorator to disable all components while a callback is executing.
+    This may be used when longer operations are expected to combat race conditions.
+
+    Internally this decorator calls `EditorPage.update_message` twice,
+    once before and once after the callback.
+    This should be considered when that method is overridden.
+    """
     def __init__(self, func: Callable[["EditorPage", *Ts], Coroutine[Any, Any, T]]):
         if not iscoroutinefunction(func):
             raise ValueError("disable_when_processing decorator requires coroutine function!")
@@ -121,6 +160,11 @@ def disable_update(
     disable_update: bool=True,
     disable_message_update: bool=False
 ) -> GenericCoroutineFunction|Callable[[GenericCoroutineFunction], GenericCoroutineFunction]:
+    """
+    Marks an item callback to not call the update methods after it finishes.
+    Only disables `EditorPage.update` by default,
+    but can be configured for `EditorPage.update_message` too.
+    """
     def decorator(decorator_func: GenericCoroutineFunction) -> GenericCoroutineFunction:
         decorator_func.__editor_disable_update__ = disable_update
         decorator_func.__editor_disable_message_update__ = disable_message_update
