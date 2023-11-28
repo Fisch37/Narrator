@@ -29,7 +29,7 @@ class AsyncDatabase(Singleton):
     def __init__(self, url: str|None=None):
         if url is None:
             raise RuntimeError("First-time constructor must specify url argument")
-        self._engine = asql.create_async_engine(url, echo=True)
+        self._engine = asql.create_async_engine(url, echo=False)
         self._sessionmaker = asql.async_sessionmaker(
             self.engine,
             expire_on_commit=False
