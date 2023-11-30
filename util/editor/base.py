@@ -25,9 +25,12 @@ def _wraps_update(
     @functools.wraps(func)
     async def wrapper(*args, **kwargs):
         response = await func(*args, **kwargs)
-        if not func.__editor_disable_update__:
+        if not (hasattr(func, "__editor_disable_update__") and func.__editor_disable_update__):
             await editor.update()
-        if not func.__editor_disable_message_update__:
+        if not (
+            hasattr(func, "__editor_disable_message_update__")
+                and func.__editor_disable_message_update__
+        ):
             await editor.update_message()
         return response
     return wrapper
