@@ -74,8 +74,15 @@ class Masks(commands.Cog):
             owner=owner,
             mask=mask
         )
-        message = await interaction.followup.send(embed=embed, view=view, wait=True)
+        message = await interaction.followup.send(
+            embed=embed,
+            view=view,
+            wait=True,
+            ephemeral=True
+        )
         view.message = message
+        await view.update()
+        await view.update_message()
     pass
 
 
