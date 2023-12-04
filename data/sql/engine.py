@@ -88,6 +88,11 @@ def get_session() -> asql.AsyncSession:
     Issues a warning when getting the sessionmaker from an unopened engine.
     """
     return get_sessionmaker()()
+    """
+    async with AsyncDatabase().sessionmaker()
+    async with get_sessionmaker()()
+    async with get_session()
+    """
 
 
 class may_make_session:
@@ -97,7 +102,7 @@ class may_make_session:
     to generate one if necessary.
     If a new session was created this helper will close it at exit.
     """
-    def __init__(self, session: asql.AsyncSession|None):
+    def __init__(self, session: asql.AsyncSession|None, /):
         self._session = session
         self._creates_session = session is None
     
@@ -109,3 +114,27 @@ class may_make_session:
     async def __aexit__(self, exc, exc_type, traceback) -> None:
         if self._creates_session:
             await self._session.close()  # type: ignore
+
+
+class may_make_session_with_transaction(may_make_session):
+    """
+    Shorthand with to allow for creation of a transaction with may_make_session.
+    Returns both session and transaction.
+
+    `commit_on_close` is a boolean and may be set to True.
+        If set, the transaction will always be commited at context exit
+        **unlesss** the context exits with an exception.
+    """
+    def __init__(self, session: asql.AsyncSession|None, commit_on_close: bool=False, /):
+        super().__init__(session)
+        self._commit_on_close = commit_on_close
+    
+    async def __aenter__(self) -> tuple[asql.AsyncSession, asql.AsyncSessionTransaction]:
+        session = await super().__aenter__()
+        self._transaction = session.begin()
+        return session, self._transaction
+    
+    async def __aexit__(self, exc, exc_type, traceback) -> None:
+        if self._commit_on_close and exc is None:
+            await self._transaction.commit()
+        return await super().__aexit__(exc, exc_type, traceback)

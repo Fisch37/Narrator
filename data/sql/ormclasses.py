@@ -10,7 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from discord.ext.commands import Bot
 import discord
-from data.sql.engine import may_make_session, Base, Snowflake
+from data.sql.engine import Base, Snowflake, may_make_session, may_make_session_with_transaction
 
 from util.limited_list import FieldsList
 from util.coroutine_tools import may_fetch_guild, may_fetch_member
@@ -91,17 +91,15 @@ class Mask(Base):
         for i, field in enumerate(self.fields):
             field.mask_id = self.id
             field.set_field_index(i)
-        async with may_make_session(session) as session, session.begin() as transaction:
+        async with may_make_session_with_transaction(session, True) as (session, _):
             session.add(self)
-            await transaction.commit()
 
     async def delete(self, *, session: AsyncSession|None=None):
         """
         Deletes this object and its field from the database.
         """
-        async with may_make_session(session) as session, session.begin() as transaction:
+        async with may_make_session_with_transaction(session, True) as (session, _):
             await session.delete(self)
-            await transaction.commit()
     
     @staticmethod
     async def new(
@@ -122,10 +120,8 @@ class Mask(Base):
             guild_id=owner.guild.id,
             **kwargs
         )
-        async with may_make_session(session) as session:
-            async with session.begin() as transaction:
-                session.add(obj)
-                await transaction.commit()
+        async with may_make_session_with_transaction(session, True) as (session, _):
+            session.add(obj)
         return obj
     
     @staticmethod
