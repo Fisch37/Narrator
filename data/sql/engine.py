@@ -88,11 +88,6 @@ def get_session() -> asql.AsyncSession:
     Issues a warning when getting the sessionmaker from an unopened engine.
     """
     return get_sessionmaker()()
-    """
-    async with AsyncDatabase().sessionmaker()
-    async with get_sessionmaker()()
-    async with get_session()
-    """
 
 
 class may_make_session:
@@ -131,7 +126,7 @@ class may_make_session_with_transaction(may_make_session):
     
     async def __aenter__(self) -> tuple[asql.AsyncSession, asql.AsyncSessionTransaction]:
         session = await super().__aenter__()
-        self._transaction = session.begin()
+        self._transaction = await session.begin_nested().__aenter__()
         return session, self._transaction
     
     async def __aexit__(self, exc, exc_type, traceback) -> None:
