@@ -5,3 +5,4 @@ colorama
 pydantic
 typing_extensions
 aiofiles
+aiocache[memcached]

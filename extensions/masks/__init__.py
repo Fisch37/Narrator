@@ -1,15 +1,26 @@
+from itertools import islice
 from logging import getLogger
+from aiocache import cached
 import discord
 from discord.ext import commands
 from discord import app_commands
 from data.sql.ormclasses import Mask
 
-from extensions.masks.editors import MaskCreatorModal, MaskEditor
+from extensions.masks.mask_editor import MaskCreatorModal, MaskEditor
 from util.coroutine_tools import may_fetch_member
 
 LOGGER = getLogger("extensions.masks")
 BOT: commands.Bot
 
+@cached(30)
+async def cached_masks_by_member(
+    member: discord.Member
+) -> list[Mask]:
+    """
+    Cached wrapper around `Mask.get_by_owner_and_guild`.
+    Does not accept sessions as the cache could otherwise give objects from another session.
+    """
+    return await Mask.get_by_owner_and_guild(member)
 
 class Masks(commands.Cog):
     mask = app_commands.Group(
@@ -83,6 +94,65 @@ class Masks(commands.Cog):
         view.message = message
         await view.update()
         await view.update_message()
+    
+    @mask.command(
+        name="edit",
+        description="Edit an existing mask"
+    )
+    @app_commands.rename(mask_name="mask")
+    @app_commands.describe(
+        mask_name="The name of the mask you seek to edit."
+    )
+    async def edit_mask(
+        self,
+        interaction: discord.Interaction,
+        mask_name: str
+    ):
+        if isinstance(interaction.user, discord.User):
+            await interaction.response.send_message(
+                ":x: Wow! This went horribly wrong! (Interaction.user is User)",
+                ephemeral=True
+            )
+            return
+        mask = await Mask.get_by_name_and_owner_and_guild(mask_name, interaction.user)
+        if mask is None:
+            await interaction.response.send_message(
+                ":x: That mask doesn't seem to exist!",
+                ephemeral=True
+            )
+            return
+        await interaction.response.defer(ephemeral=True)
+        embed = discord.Embed(
+            title="Hang on! The editor is going to pop up soon!"
+        )
+        view = MaskEditor(
+            None,
+            embed,
+            owner=interaction.user,
+            mask=mask
+        )
+        message = await interaction.followup.send(view=view, embed=embed)
+        view.message = message
+        await view.update()
+        await view.update_message()
+    
+    @edit_mask.autocomplete("mask_name")
+    async def _edit_mask_name_autocomplete(
+        self,
+        interaction: discord.Interaction,
+        mask_name: str
+    ) -> list[app_commands.Choice]:
+        if interaction.guild is None:
+            return []
+        masks = await cached_masks_by_member(interaction.user)
+        filtered_masks = filter(lambda m: m.name.startswith(mask_name), masks)
+        return [
+            app_commands.Choice(
+                name=m.name,
+                value=m.name
+            )
+            for m in islice(filtered_masks, 25)
+        ]
     pass
 
 

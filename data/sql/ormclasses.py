@@ -88,9 +88,9 @@ class Mask(Base):
         """
         Updates this object's representation within the database.
         """
-        for i, field in enumerate(self.fields):
-            field.mask_id = self.id
-            field.set_field_index(i)
+        # for i, field in enumerate(self.fields):
+        #     field.mask_id = self.id
+        #     field.set_field_index(i)
         async with may_make_session_with_transaction(session, True) as (session, _):
             session.add(self)
 
@@ -174,6 +174,49 @@ class Mask(Base):
                 .where(Mask.owner_id == owner_id and Mask.guild_id == guild_id)  # type: ignore
             )
             return list(result.all())
+    
+    @staticmethod
+    @overload
+    async def get_by_name_and_owner_and_guild(
+        name: str,
+        owner: int,
+        guild_id: int,
+        *,
+        session: AsyncSession|None=None
+    ) -> "Mask|None": 
+        ...
+    
+    @staticmethod
+    @overload
+    async def get_by_name_and_owner_and_guild(
+        name: str,
+        owner: discord.Member,
+        *,
+        session: AsyncSession|None=None
+    ) -> "Mask|None":
+        ...
+    
+    @staticmethod
+    async def get_by_name_and_owner_and_guild(
+        name: str,
+        owner: discord.Member|int,
+        guild_id: int|None=None,
+        *,
+        session: AsyncSession|None=None
+    ) -> "Mask|None":
+        if isinstance(owner, discord.Member):
+            owner_id = owner.id
+            guild_id = owner.guild.id
+        else:
+            owner_id = owner
+        
+        async with may_make_session(session) as session:
+            return await session.scalar(
+                select(Mask)
+                .where(Mask.owner_id == owner_id)
+                .where(Mask.guild_id == guild_id)
+                .where(Mask.name == name)
+            )
 
 
 class MaskField(Base):
