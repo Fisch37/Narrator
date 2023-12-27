@@ -11,8 +11,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from discord.ext.commands import Bot
 import discord
 from data.sql.engine import Base, Snowflake, may_make_session, may_make_session_with_transaction
+from data.sql.special_types import FieldsList
 
-from util.limited_list import FieldsList
 from util.coroutine_tools import may_fetch_guild, may_fetch_member
 
 
