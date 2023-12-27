@@ -59,6 +59,7 @@ def read_token():
 
 setup_logging()
 intents = discord.Intents.default()
+intents.message_content = True
 bot = CustomBot("/", intents=intents)
 config = read_config(CONFIG_PATH)
 
