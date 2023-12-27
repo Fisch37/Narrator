@@ -1,10 +1,12 @@
 from itertools import islice
 from logging import getLogger
+from typing import Sequence
 from aiocache import cached
 import discord
 from discord.ext import commands
 from discord import app_commands
 from data.sql.ormclasses import Mask
+from data.utils.masks import cached_mask_names_by_member
 
 from extensions.masks.mask_editor import MaskCreatorModal, MaskEditor
 from extensions.masks.mask_show import mask_to_embed
@@ -14,15 +16,6 @@ from util.coroutine_tools import may_fetch_member
 LOGGER = getLogger("extensions.masks")
 BOT: commands.Bot
 
-@cached(30)
-async def cached_masks_by_member(
-    member: discord.Member
-) -> list[Mask]:
-    """
-    Cached wrapper around `Mask.get_by_owner_and_guild`.
-    Does not accept sessions as the cache could otherwise give objects from another session.
-    """
-    return await Mask.get_by_owner_and_guild(member)
 
 class Masks(commands.Cog):
     mask = app_commands.Group(
@@ -179,14 +172,14 @@ class Masks(commands.Cog):
     ) -> list[app_commands.Choice]:
         if interaction.guild is None:
             return []
-        masks = await cached_masks_by_member(interaction.user)
-        filtered_masks = filter(lambda m: m.name.startswith(mask_name), masks)
+        mask_names: Sequence[str] = await cached_mask_names_by_member(interaction.user)
+        filtered_masks = filter(lambda name: name.startswith(mask_name), mask_names)
         return [
             app_commands.Choice(
-                name=m.name,
-                value=m.name
+                name=name,
+                value=name
             )
-            for m in islice(filtered_masks, 25)
+            for name in islice(filtered_masks, 25)
         ]
     pass
 
