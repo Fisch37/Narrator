@@ -7,6 +7,8 @@ from discord import app_commands
 from data.sql.ormclasses import Mask
 
 from extensions.masks.mask_editor import MaskCreatorModal, MaskEditor
+from extensions.masks.mask_show import mask_to_embed
+from util.confirmation_view import ConfirmationView
 from util.coroutine_tools import may_fetch_member
 
 LOGGER = getLogger("extensions.masks")
@@ -120,8 +122,57 @@ class Masks(commands.Cog):
         await view.update()
         await view.update_message()
     
+    @mask.command(
+        name="remove",
+        description="Delete an existing mask. This operation cannot be undone!"
+    )
+    @app_commands.rename(mask_name="mask")
+    @app_commands.describe(
+        mask_name="The name of the mask you want to remove."
+    )
+    async def mask_remove(
+        self,
+        interaction: discord.Interaction,
+        mask_name: str
+    ):
+        mask = await Mask.get_by_name_and_owner_and_guild(mask_name, interaction.user)
+        if mask is None:
+            await interaction.response.send_message(
+                ":x: That mask doesn't seem to exist!",
+                ephemeral=True
+            )
+            return
+        
+        embed = await mask_to_embed(mask, interaction.user)
+        view = ConfirmationView(
+            confirm_style=discord.ButtonStyle.danger,
+            cancel_style=discord.ButtonStyle.success
+        )
+        await interaction.response.send_message(
+            "Are you sure you want to remove this mask? This cannot be undone.",
+            embed=embed,
+            view=view,
+            ephemeral=True
+        )
+        try:
+            should_delete = await view
+        except TimeoutError:
+            return
+        if should_delete:
+            await mask.delete()
+            await interaction.followup.send(
+                ":wastebasket: Mask deleted!",
+                ephemeral=True
+            )
+        else:
+            await interaction.followup.send(
+                ":white_check_mark: Mask deletion cancelled!",
+                ephemeral=True
+            )
+    
     @edit_mask.autocomplete("mask_name")
-    async def _edit_mask_name_autocomplete(
+    @mask_remove.autocomplete("mask_name")
+    async def _mask_name_autocomplete(
         self,
         interaction: discord.Interaction,
         mask_name: str
