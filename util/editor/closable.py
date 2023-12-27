@@ -1,10 +1,11 @@
 import asyncio
 import discord, discord.ui
 
+from util.auto_stop_modal import AutoStopModal
 from util.editor import EditorPage
 from util.editor.base import disable_update
 
-class _ClosingModal(discord.ui.Modal, title="Close this editor?"):
+class _ClosingModal(AutoStopModal, title="Close this editor?"):
     # This dummy field feels stupid, but I think it's better 
     dummy_field = discord.ui.TextInput(
         label="Ignore me",
@@ -12,10 +13,7 @@ class _ClosingModal(discord.ui.Modal, title="Close this editor?"):
         required=False,
         max_length=30
     )
-    
-    async def on_submit(self, interaction: discord.Interaction) -> None:
-        await interaction.response.defer()
-        self.stop()
+
 
 class ClosableEditor(EditorPage):
     """
