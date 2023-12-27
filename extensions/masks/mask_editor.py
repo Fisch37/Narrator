@@ -8,6 +8,7 @@ from discord import ButtonStyle, ui
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from data.sql.ormclasses import Mask, MaskField
+from extensions.masks.mask_show import mask_to_embed
 from util.auto_stop_modal import AutoStopModal
 from util.editor import SwitchablePage, OwnedEditor
 from util.editor.base import disable_update
@@ -275,21 +276,7 @@ class MaskEditor(ClosableEditor, OwnedEditor):
         # Disallow operations when there are no fields
         self.remove_field.disabled = self.move_field.disabled = len(self.mask.fields) < 1
         
-        self.embed.title = self.mask.name
-        self.embed.description = self.mask.description
-        self.embed.set_image(
-            url=self.mask.avatar_url
-        ).set_author(
-            name=self.owner.display_name,
-            icon_url=self.owner.display_avatar.url
-        )
-        self.embed.clear_fields()
-        for field in self.mask.fields:
-            self.embed.add_field(
-                name=field.name,
-                value=field.value,
-                inline=field.inline
-            )
+        await mask_to_embed(self.mask, self.owner, embed=self.embed)
         await super().update()
     
     async def on_end(self) -> None:

@@ -70,15 +70,7 @@ class Masks(commands.Cog):
             # TODO: Add some form of URL validation
             avatar_url=creation_modal_prompt.avatar_url.value or None
         )
-        embed = discord.Embed(
-            title=mask.name,
-            description=mask.description
-        ).set_image(
-            url=mask.avatar_url
-        ).set_author(
-            name=interaction.user.display_name,
-            icon_url=interaction.user.display_avatar.url
-        )
+        embed = await mask_to_embed(mask, interaction.user)
         view = MaskEditor(
             None,
             embed,
@@ -116,9 +108,7 @@ class Masks(commands.Cog):
             )
             return
         await interaction.response.defer(ephemeral=True)
-        embed = discord.Embed(
-            title="Hang on! The editor is going to pop up soon!"
-        )
+        embed = await mask_to_embed(mask, interaction.user)
         view = MaskEditor(
             None,
             embed,
