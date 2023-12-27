@@ -108,12 +108,6 @@ class Masks(commands.Cog):
         interaction: discord.Interaction,
         mask_name: str
     ):
-        if isinstance(interaction.user, discord.User):
-            await interaction.response.send_message(
-                ":x: Wow! This went horribly wrong! (Interaction.user is User)",
-                ephemeral=True
-            )
-            return
         mask = await Mask.get_by_name_and_owner_and_guild(mask_name, interaction.user)
         if mask is None:
             await interaction.response.send_message(
