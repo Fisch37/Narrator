@@ -20,8 +20,8 @@ class Masks(commands.Cog):
     )
     
     @mask.command(
-        name="create_mask",
-        description="Edit or create a mask.",
+        name="create",
+        description="Create a new mask.",
     )
     async def create_mask(
         self,
