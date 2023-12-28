@@ -46,3 +46,7 @@ def may_fetch_generator(
 may_fetch_guild = may_fetch_generator(Bot.get_guild, Bot.fetch_guild)
 may_fetch_user = may_fetch_generator(Bot.get_user, Bot.fetch_user)
 may_fetch_member = may_fetch_generator(Guild.get_member, Guild.fetch_member)
+may_fetch_channel_or_thread = may_fetch_generator(
+    Guild.get_channel_or_thread,
+    Guild.fetch_channel
+)

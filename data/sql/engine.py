@@ -13,7 +13,7 @@ from util import Singleton
 LOGGER = logging.getLogger("data.sql.engine")
 
 
-class Base(MappedAsDataclass, DeclarativeBase):
+class Base(MappedAsDataclass, asql.AsyncAttrs, DeclarativeBase):
     """Base class for declarative SQL classes found below."""
     type_annotation_map = {
         Snowflake: HugeInt
@@ -59,6 +59,7 @@ class AsyncDatabase(Singleton):
         return self._opened
 
     async def __aenter__(self) -> Self:
+        import data.sql.ormclasses  # Forces ormclasses to be loaded, creating the ORM
         async with self.engine.begin() as connection:
             await connection.run_sync(Base.metadata.create_all)
         LOGGER.debug("Initialized database")

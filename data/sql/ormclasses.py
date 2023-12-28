@@ -13,7 +13,7 @@ import discord
 from data.sql.engine import Base, Snowflake, may_make_session, may_make_session_with_transaction
 from data.sql.special_types import FieldsList
 
-from util.coroutine_tools import may_fetch_guild, may_fetch_member
+from util.coroutine_tools import may_fetch_guild, may_fetch_member, may_fetch_channel_or_thread
 
 
 class Mask(Base):
@@ -40,6 +40,14 @@ class Mask(Base):
         default_factory=FieldsList,
         cascade="all, delete-orphan"
     )
+    
+    _billboards: Mapped[list["MaskBillboard"]] = relationship(
+        back_populates="mask",
+        cascade="delete",  # no delete-orphan because you should never manipulate this thing.
+        repr=False,
+        init=False
+    )
+    """KEEP OUT! Only for cascading purposes!"""
 
     async def may_fetch_owner(self, bot: Bot) -> discord.Member:
         """
@@ -254,3 +262,74 @@ class MaskField(Base):
         This should not be used outside of database operations.
         """
         self._index = index
+
+
+class MaskBillboard(Base):
+    """
+    Stores data about published masks.
+    """
+    __tablename__ = "billboards"
+    
+    mask_id: Mapped[int] = mapped_column(
+        ForeignKey(Mask.id),
+        primary_key=True,
+        init=False
+    )
+    mask: Mapped[Mask] = relationship(
+        # cascade=""
+    )
+    refresh_id: Mapped[str]
+    channel_id: Mapped[Snowflake]
+    guild_id: Mapped[Snowflake]
+    message_id: Mapped[Snowflake] = mapped_column(primary_key=True)
+    
+    @staticmethod
+    async def new(
+        mask: Mask,
+        refresh_id: str,
+        message: discord.Message,
+        guild: discord.Guild,
+        *,
+        session: AsyncSession|None=None
+    ) -> "MaskBillboard":
+        obj = MaskBillboard(
+            mask=mask,
+            refresh_id=refresh_id,
+            channel_id=message.channel.id,
+            guild_id=guild.id,
+            message_id=message.id
+        )
+        async with may_make_session_with_transaction(session, True) as (session, _):
+            session.add(obj)
+            await session.flush()
+        return obj
+    
+    @staticmethod
+    async def get_all(
+        *,
+        session: AsyncSession|None=None
+    ):
+        async with may_make_session(session) as session:
+            return await session.stream_scalars(
+                select(MaskBillboard)
+                .execution_options(yield_per=10)
+            )
+    
+    async def delete(
+        self,
+        *,
+        session: AsyncSession|None=None
+    ):
+        async with may_make_session_with_transaction(session, True) as (session, _):
+            await session.delete(self)
+    
+    async def fetch_message(self, bot: Bot) -> discord.Message:
+        guild = await may_fetch_guild(bot, self.guild_id)
+        channel = await may_fetch_channel_or_thread(guild, self.channel_id)
+        if not hasattr(channel, "fetch_message"):
+            raise TypeError(
+                "Attempted to call fetch_message on Billboard in CategoryChannel!"
+                + "What? How? Why? You goofed! You seriously goofed! This should never happen!"
+            )
+        # Apparently type checkers don't have hasattr as a TypeGuard-ish thing?
+        return await channel.fetch_message(self.message_id)  # type: ignore

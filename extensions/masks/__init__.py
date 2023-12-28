@@ -1,3 +1,4 @@
+import asyncio
 from itertools import islice
 from logging import getLogger
 from typing import Sequence
@@ -9,7 +10,7 @@ from data.sql.ormclasses import Mask
 from data.utils.masks import cached_mask_names_by_member
 
 from extensions.masks.mask_editor import MaskCreatorModal, MaskEditor
-from extensions.masks.mask_show import mask_to_embed
+from extensions.masks.mask_show import PrivateShowView, mask_to_embed, summon_all_public_show_views
 from util.confirmation_view import ConfirmationView
 from util.coroutine_tools import may_fetch_member
 
@@ -18,6 +19,17 @@ BOT: commands.Bot
 
 
 class Masks(commands.Cog):
+    async def _summon_public_views_stored(self):
+        # FIXME: Persistent views created here don't respond to interactions
+        self._public_show_views = await summon_all_public_show_views(BOT)
+        for view in self._public_show_views:
+            BOT.add_view(view, message_id=view.message.id)
+        pass
+    
+    async def cog_load(self) -> None:
+        asyncio.create_task(self._summon_public_views_stored())
+        return await super().cog_load()
+    
     mask = app_commands.Group(
         name="mask",
         description="Management command for use of masks.",
@@ -163,8 +175,40 @@ class Masks(commands.Cog):
                 ephemeral=True
             )
     
+    @mask.command(
+        name="show",
+        description="Show or publish a mask."
+    )
+    @app_commands.rename(mask_name="mask")
+    @app_commands.describe(
+        mask_name="The mask to show the information of."
+    )
+    async def mask_show(
+        self,
+        interaction: discord.Interaction,
+        mask_name: str
+    ):
+        # TODO: Find a way to avoid this 3x code duplication without doubling your DB queries
+        # (decorators may be a valiant try)
+        mask = await Mask.get_by_name_and_owner_and_guild(mask_name, interaction.user)
+        if mask is None:
+            await interaction.response.send_message(
+                ":x: That mask doesn't seem to exist!",
+                ephemeral=True
+            )
+            return
+        
+        embed = await mask_to_embed(mask, interaction.user)
+        view = PrivateShowView(mask)
+        await interaction.response.send_message(
+            embed=embed,
+            view=view,
+            ephemeral=True
+        )
+    
     @edit_mask.autocomplete("mask_name")
     @mask_remove.autocomplete("mask_name")
+    @mask_show.autocomplete("mask_name")
     async def _mask_name_autocomplete(
         self,
         interaction: discord.Interaction,
