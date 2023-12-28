@@ -299,6 +299,8 @@ class MaskEditor(ClosableEditor, OwnedEditor):
 
     @ui.button(label="Add Field", row=1, style=discord.ButtonStyle.success)
     async def add_field(self, interaction: discord.Interaction, _):
+        # FIXME: New fields are not flushed to the database. 
+        # Ensure a permanent session with this editor?
         modal = FieldCreateModal(title="Add a new field")
         await interaction.response.send_modal(modal)
         try:
