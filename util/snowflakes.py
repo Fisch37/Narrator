@@ -45,7 +45,8 @@ class SnowflakeGenerator:
         self.process_id = process_id
         # ident would only ever be None if the threads isn't running.
         # It is running. It is currently executing this code.
-        self.worker_id: int = current_thread().ident  # type: ignore
+        # FIXME: This may become problematic in multithreaded-applications as thread ids may collide
+        self.worker_id: int = current_thread().ident & 0x1F # type: ignore
         self._increment = 0
     
     def generate_raw(self):
