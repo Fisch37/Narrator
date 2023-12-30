@@ -20,11 +20,13 @@ Some functions in here may be async others may not.
 Private channels do not have a hierarchy and are thus not supported.
 """
 from typing import Any, Generator, Sequence, overload, Union, Never
+from itertools import filterfalse
 import discord
 
 HierarchyRoot = discord.Guild
 HierarchyBranch = discord.abc.GuildChannel
 HierarchyLeaf = discord.Thread
+HierarchyParent = HierarchyRoot|HierarchyBranch
 HierarchySubnode = HierarchyBranch|HierarchyLeaf
 HierarchyNode = HierarchyRoot|HierarchySubnode
 CategorySubchannels = Union[
@@ -42,6 +44,15 @@ _SUBCHANNEL_LUT: dict[type[HierarchyNode], str|None] = {
     discord.VoiceChannel : None,
     discord.StageChannel : None,
     discord.Thread : None,
+}
+_PARENT_LUT: dict[type[HierarchyNode], tuple[str, ...]|None] = {
+    discord.Guild : None,
+    discord.CategoryChannel : ("guild",),
+    discord.TextChannel : ("category", "guild"),
+    discord.ForumChannel : ("category", "guild"),
+    discord.VoiceChannel : ("category", "guild"),
+    discord.StageChannel : ("category", "guild"),
+    discord.Thread : ("parent",),
 }
 
 @overload
@@ -124,3 +135,46 @@ def _get_all_subchannels_breadth(channel: HierarchyNode) -> Generator[HierarchyS
     yield from subchannels
     for sub in subchannels:
         yield from _get_all_subchannels_breadth(channel)
+
+
+@overload
+def get_parent(channel: discord.Guild) -> None: ...
+
+@overload
+def get_parent(channel: discord.CategoryChannel) -> discord.Guild: ...
+
+@overload
+def get_parent(channel: Union[
+    discord.TextChannel,
+    discord.ForumChannel,
+    discord.VoiceChannel,
+    discord.StageChannel
+    ]) -> discord.Guild|discord.CategoryChannel: ...
+
+@overload
+def get_parent(channel: discord.Thread) -> discord.TextChannel|discord.ForumChannel: ...
+
+@overload
+def get_parent(channel: HierarchyNode) -> HierarchyParent|None: ...
+
+def get_parent(channel: HierarchyNode) -> HierarchyParent|None:
+    try:
+        attributes = _PARENT_LUT[type(channel)]
+    except KeyError as e:
+        raise TypeError(
+            f"Object of type {type(channel)} is not a supported channel type.\
+            This may be caused by an invalid variable type or an unsupported version of discord.py"
+        )
+    else:
+        if attributes is None:
+            return None
+        # Return first non-None attribute
+        # (there have to be multiple attributes because 
+        # GuildChannels may or may not be in a category)
+        return next(filterfalse(
+            lambda result: result is None,
+            (
+                getattr(channel, attr) 
+                for attr in attributes
+            )
+        ))
