@@ -9,9 +9,12 @@ from typing import overload
 import discord
 from discord import ui
 from discord.ext import commands
-from data.sql.engine import get_session
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.exc import InvalidRequestError
 
+from data.sql.engine import get_session
 from data.sql.ormclasses import Mask, MaskBillboard
+from util.editor.base import disable_update
 from util.editor.owned import OwnedEditor
 from util.snowflakes import generate_snowflake
 
@@ -68,8 +71,15 @@ class PrivateShowView(ui.View):
     """
     Has a single button labelled publish to publish the targetted mask.
     """
-    def __init__(self, mask: Mask, *, timeout: float=180):
+    def __init__(
+        self,
+        mask: Mask,
+        *,
+        timeout: float=180,
+        session: AsyncSession|None=None
+    ):
         self.mask = mask
+        self.session = session
         super().__init__(timeout=timeout)
     
     @ui.button(label="Publish", emoji="\u2709", style=discord.ButtonStyle.primary)
@@ -89,7 +99,8 @@ class PrivateShowView(ui.View):
             message,
             embed,
             interaction.user,
-            self.mask
+            self.mask,
+            session=self.session
         )
         self.stop()
 
@@ -119,7 +130,7 @@ class PublicShowView(OwnedEditor, timeout=None):
             self.refresh.custom_id = refresh_id
         pass
     
-    async def update(self):
+    async def refresh_mask(self):
         async with get_session() as session:
             session.add(self.mask)
             # Doing refresh and field refreshes in sequence because I'm afraid of orphans
@@ -127,6 +138,9 @@ class PublicShowView(OwnedEditor, timeout=None):
             async with asyncio.TaskGroup() as tg:
                 for field in self.mask.fields:
                     tg.create_task(session.refresh(field))
+    
+    async def update(self):
+        await self.refresh_mask()
         self.embed = await mask_to_embed(self.mask, self.owner, embed=self.embed)
     
     async def _enable_later(self):
@@ -135,6 +149,7 @@ class PublicShowView(OwnedEditor, timeout=None):
         await self.update_message()
     
     @ui.button(label="Refresh", style=discord.ButtonStyle.green, emoji="\U0001F501")
+    @disable_update # Required to catch session collision errors
     async def refresh(self, interaction: discord.Interaction, _):
         if interaction.user != self.owner:
             await interaction.response.send_message(
@@ -142,9 +157,17 @@ class PublicShowView(OwnedEditor, timeout=None):
                 ephemeral=True
             )
             return
-        self.refresh.disabled = True
-        asyncio.create_task(self._enable_later())
-        await interaction.response.defer()
+        try:
+            await self.update()
+        except InvalidRequestError:
+            await interaction.response.send_message(
+                "Woops! Something else seems to have claimed access to this mask! Please close all open editors and try again!",
+                ephemeral=True
+            )
+        else:
+            self.refresh.disabled = True
+            asyncio.create_task(self._enable_later())
+            await interaction.response.defer()
     
     
     @classmethod
@@ -153,7 +176,9 @@ class PublicShowView(OwnedEditor, timeout=None):
         message: discord.Message,
         embed: discord.Embed,
         owner: discord.Member,
-        mask: Mask
+        mask: Mask,
+        *,
+        session: AsyncSession|None=None
     ) -> T:
         """
         Generates a new view from passed arguments and sets it on the message.
@@ -172,7 +197,8 @@ class PublicShowView(OwnedEditor, timeout=None):
                 mask,
                 obj.refresh.custom_id,  # type: ignore
                 message,
-                owner.guild
+                owner.guild,
+                session=session
             ))
             tg.create_task(message.edit(view=obj))
         
@@ -207,11 +233,25 @@ class PublicShowView(OwnedEditor, timeout=None):
         )
 
 async def summon_all_public_show_views(bot: commands.Bot, /) -> list[PublicShowView]:
-    
-    tasks = []
-    async with get_session() as session, asyncio.TaskGroup() as tg:
+    tasks: list[asyncio.Task[PublicShowView]] = []
+    async with get_session() as session:
         async for billboard in await MaskBillboard.get_all(session=session):
             tasks.append(
-                tg.create_task(PublicShowView.from_billboard(billboard, bot))
+                asyncio.create_task(PublicShowView.from_billboard(billboard, bot))
             )
-    return [t.result() for t in tasks]
+        results = []
+        for t in tasks:
+            should_continue = False
+            try:
+                try:
+                    results.append(await t)
+                except* discord.errors.NotFound:
+                    # TODO: Figure out how to implement auto-deletion in this case
+                    should_continue = True
+            # "cannot have both 'except' and 'except*' on the same 'try'"
+            # Well, fuck you!
+            except Exception as e:
+                LOGGER.exception("Exception occured during public show view loads", exc_info=e)
+            if should_continue:
+                continue
+    return results
