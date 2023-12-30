@@ -134,7 +134,7 @@ def _get_all_subchannels_breadth(channel: HierarchyNode) -> Generator[HierarchyS
     subchannels = get_subchannels(channel)
     yield from subchannels
     for sub in subchannels:
-        yield from _get_all_subchannels_breadth(channel)
+        yield from _get_all_subchannels_breadth(sub)
 
 
 @overload
