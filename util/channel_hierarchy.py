@@ -72,14 +72,15 @@ def get_subchannels(channel: HierarchyNode) -> Sequence[HierarchySubnode]:
     """
     try:
         attribute = _SUBCHANNEL_LUT[type(channel)]
-        if attribute is None:
-            return []
-        return getattr(channel, attribute)
     except KeyError as e:
         raise TypeError(
             "The channel you passed is not of a known channel type.\
             This may be due to invalid input or an unsupported version of discord.py"
         ) from e
+    else:
+        if attribute is None:
+            return []
+        return getattr(channel, attribute)
 
 def get_all_subchannels(
     channel: HierarchyNode,
