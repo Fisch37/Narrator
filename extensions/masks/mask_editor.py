@@ -274,7 +274,8 @@ class MaskEditor(ClosableEditor, OwnedEditor):
 
     async def update(self):
         # Disallow operations when there are no fields
-        self.remove_field.disabled = self.move_field.disabled = len(self.mask.fields) < 1
+        self.remove_field.disabled = len(self.mask.fields) < 1
+        self.move_field.disabled = self.edit_field.disabled = self.remove_field.disabled
         
         await mask_to_embed(self.mask, self.owner, embed=self.embed)
         await super().update()
