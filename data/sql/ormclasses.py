@@ -7,6 +7,7 @@ from typing import overload
 from sqlalchemy import ForeignKey, UniqueConstraint, select
 from sqlalchemy.orm import mapped_column, Mapped, relationship
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.ext.orderinglist import OrderingList, ordering_list
 
 from discord.ext.commands import Bot
 import discord
@@ -34,11 +35,12 @@ class Mask(Base):
     guild_id: Mapped[Snowflake] = mapped_column()
     description: Mapped[str] = mapped_column(default="")
     avatar_url: Mapped[str|None] = mapped_column(default=None)
-    fields: Mapped[FieldsList["MaskField"]] = relationship(  # type: ignore
+    fields: Mapped[OrderingList["MaskField"]] = relationship(
         order_by="MaskField._index",
         lazy="immediate",
-        default_factory=FieldsList,
-        cascade="all, delete-orphan"
+        cascade="all, delete-orphan",
+        collection_class=ordering_list("_index"),
+        init=False
     )
     
     _billboards: Mapped[list["MaskBillboard"]] = relationship(
@@ -96,9 +98,6 @@ class Mask(Base):
         """
         Updates this object's representation within the database.
         """
-        # for i, field in enumerate(self.fields):
-        #     field.mask_id = self.id
-        #     field.set_field_index(i)
         async with may_make_session_with_transaction(session, True) as (session, _):
             session.add(self)
 
@@ -235,33 +234,19 @@ class MaskField(Base):
     """
     __tablename__ = "mask_fields"
 
-    id: Mapped[int] = mapped_column(
-        primary_key=True,
-        init=False
-    )
     mask_id: Mapped[int] = mapped_column(
         ForeignKey("masks.id"),
-        init=False
+        init=False,
+        primary_key=True
     )
-    _index: Mapped[int] = mapped_column(init=False)
-    name: Mapped[str] = mapped_column()
-    value: Mapped[str] = mapped_column()
-    inline: Mapped[bool] = mapped_column()
-
-    __table_args__ = (
-        UniqueConstraint(
-            "mask_id",
-            "_index",
-            name="list_position_uniqueness"
-        ),
-    )
-
-    def set_field_index(self, index: int) -> None:
-        """
-        Updates the _index value of this object.
-        This should not be used outside of database operations.
-        """
-        self._index = index
+    # NOTE: This may cause issues with OrderingList (see the docs)
+    _index: Mapped[int] = mapped_column(init=False, primary_key=True)
+    name: Mapped[str]
+    value: Mapped[str]
+    inline: Mapped[bool]
+    
+    def __repr__(self) -> str:
+        return f'<{type(self).__name__} {self.mask_id}:{self._index} inline={self.inline} name={self.name!r}>'
 
 
 class MaskBillboard(Base):
