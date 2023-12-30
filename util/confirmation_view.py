@@ -34,6 +34,7 @@ class ConfirmationView(View):
     async def _cancel(self, interaction: Interaction, _):
         await interaction.response.defer()
         self.__future.set_result(False)
+        self.stop()
     
     async def on_timeout(self) -> None:
         self.__future.set_exception(TimeoutError("Confirmation timed out"))
