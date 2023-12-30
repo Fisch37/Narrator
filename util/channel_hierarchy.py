@@ -81,13 +81,45 @@ def get_subchannels(channel: HierarchyNode) -> Sequence[HierarchySubnode]:
             This may be due to invalid input or an unsupported version of discord.py"
         ) from e
 
-def get_all_subchannels(channel: HierarchyNode) -> Generator[HierarchySubnode, None, None]:
+def get_all_subchannels(
+    channel: HierarchyNode,
+    *,
+    breadth_first: bool=False
+) -> Generator[HierarchySubnode, None, None]:
     """
     Recursively yields all direct and indirect subchannels of the passed channel.
-    Direct subchannels are yielded with their children directly following.
-    This is equivalent to the "visual" ordering of channels in the Discord UI.
+    By default, subchannels are yielded depth-first, which is 
+    equivalent to the "visual" ordering of channels in the Discord UI.
+    
+    The `breadth_first` flag may be used to enable breadth-first traversal.
+    This mode may prove faster when in case of a recursive search, 
+    but is less intuitive in its sequencing.
     """
+    # Doing these as seperate functions to avoid checking for the flag on every layer.
+    if not breadth_first:
+        return _get_all_subchannels_depth(channel)
+    return _get_all_subchannels_breadth(channel)
+
+def is_subchannel(channel: HierarchySubnode, parent: HierarchyNode) -> bool:
+    """
+    Returns whether the passed channel is a subchannel of parent.
+    
+    This differs from `channel in get_subchannels(parent)` 
+    because it searches the entire subtree (meaning it includes sub-subchannels)
+    """
+    # Breadth-first allows for usually quicker searches as (for example)
+    # users find themselves inside of threads significantly less often.
+    return channel in get_all_subchannels(parent, breadth_first=True)
+
+
+def _get_all_subchannels_depth(channel: HierarchyNode) -> Generator[HierarchySubnode, None, None]:
     subchannels = get_subchannels(channel)
     for sub in subchannels:
         yield sub
-        yield from get_all_subchannels(sub)
+        yield from _get_all_subchannels_depth(sub)
+
+def _get_all_subchannels_breadth(channel: HierarchyNode) -> Generator[HierarchySubnode, None, None]:
+    subchannels = get_subchannels(channel)
+    yield from subchannels
+    for sub in subchannels:
+        yield from _get_all_subchannels_breadth(channel)
