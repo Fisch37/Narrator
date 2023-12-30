@@ -1,16 +1,13 @@
 import asyncio
-from itertools import islice
 from logging import getLogger
-from typing import Sequence
-from aiocache import cached
 import discord
 from discord.ext import commands
 from discord import app_commands
 from data.sql.ormclasses import Mask
-from data.utils.masks import cached_mask_names_by_member
 
 from extensions.masks.mask_editor import EditCollisionError, MaskCreatorModal, MaskEditor
 from extensions.masks.mask_show import PrivateShowView, mask_to_embed, summon_all_public_show_views
+from extensions.masks.mask_transformer import MaskParameter, MaskTransformer
 from util.confirmation_view import ConfirmationView
 from util.coroutine_tools import may_fetch_member
 
@@ -98,22 +95,14 @@ class Masks(commands.Cog):
         name="edit",
         description="Edit an existing mask"
     )
-    @app_commands.rename(mask_name="mask")
     @app_commands.describe(
-        mask_name="The name of the mask you seek to edit."
+        mask="The name of the mask you seek to edit."
     )
     async def edit_mask(
         self,
         interaction: discord.Interaction,
-        mask_name: str
+        mask: MaskParameter
     ):
-        mask = await Mask.get_by_name_and_owner_and_guild(mask_name, interaction.user)
-        if mask is None:
-            await interaction.response.send_message(
-                ":x: That mask doesn't seem to exist!",
-                ephemeral=True
-            )
-            return
         await interaction.response.defer(ephemeral=True)
         embed = await mask_to_embed(mask, interaction.user)
         while True:
@@ -146,23 +135,14 @@ class Masks(commands.Cog):
         name="remove",
         description="Delete an existing mask. This operation cannot be undone!"
     )
-    @app_commands.rename(mask_name="mask")
     @app_commands.describe(
-        mask_name="The name of the mask you want to remove."
+        mask="The name of the mask you want to remove."
     )
     async def mask_remove(
         self,
         interaction: discord.Interaction,
-        mask_name: str
+        mask: MaskParameter
     ):
-        mask = await Mask.get_by_name_and_owner_and_guild(mask_name, interaction.user)
-        if mask is None:
-            await interaction.response.send_message(
-                ":x: That mask doesn't seem to exist!",
-                ephemeral=True
-            )
-            return
-        
         embed = await mask_to_embed(mask, interaction.user)
         view = ConfirmationView(
             confirm_style=discord.ButtonStyle.danger,
@@ -194,25 +174,14 @@ class Masks(commands.Cog):
         name="show",
         description="Show or publish a mask."
     )
-    @app_commands.rename(mask_name="mask")
     @app_commands.describe(
-        mask_name="The mask to show the information of."
+        mask="The mask to show the information of."
     )
     async def mask_show(
         self,
         interaction: discord.Interaction,
-        mask_name: str
+        mask: MaskParameter
     ):
-        # TODO: Find a way to avoid this 3x code duplication without doubling your DB queries
-        # (decorators may be a valiant try)
-        mask = await Mask.get_by_name_and_owner_and_guild(mask_name, interaction.user)
-        if mask is None:
-            await interaction.response.send_message(
-                ":x: That mask doesn't seem to exist!",
-                ephemeral=True
-            )
-            return
-        
         embed = await mask_to_embed(mask, interaction.user)
         view = PrivateShowView(mask)
         await interaction.response.send_message(
@@ -221,25 +190,23 @@ class Masks(commands.Cog):
             ephemeral=True
         )
     
-    @edit_mask.autocomplete("mask_name")
-    @mask_remove.autocomplete("mask_name")
-    @mask_show.autocomplete("mask_name")
-    async def _mask_name_autocomplete(
+    @edit_mask.error
+    @mask_remove.error
+    @mask_show.error
+    async def _mask_transform_error_handler(
         self,
         interaction: discord.Interaction,
-        mask_name: str
-    ) -> list[app_commands.Choice]:
-        if interaction.guild is None:
-            return []
-        mask_names: Sequence[str] = await cached_mask_names_by_member(interaction.user)
-        filtered_masks = filter(lambda name: name.startswith(mask_name), mask_names)
-        return [
-            app_commands.Choice(
-                name=name,
-                value=name
+        error: app_commands.AppCommandError
+    ) -> None:
+        if (
+            isinstance(error, app_commands.TransformerError) 
+            and isinstance(error.transformer, MaskTransformer)
+        ):
+            await interaction.response.send_message(
+                ":x: That mask doesn't seem to exist!",
+                ephemeral=True
             )
-            for name in islice(filtered_masks, 25)
-        ]
+            return
     
     async def _close_colliding_editor_if_requested(
         self,
