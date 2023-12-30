@@ -178,3 +178,17 @@ def get_parent(channel: HierarchyNode) -> HierarchyParent|None:
                 for attr in attributes
             )
         ))
+
+def is_parent(parent: HierarchyNode, child: HierarchyNode) -> bool:
+    """
+    Checks whether a channel is a parent of another channel.
+    
+    This differs from a simple `parent == get_parent(child)` call
+    since it recursively checks the entire tree upward.
+    """
+    actual_parent = get_parent(child)
+    if actual_parent is None:
+        return False
+    if parent == actual_parent:
+        return True
+    return is_parent(parent, actual_parent)
