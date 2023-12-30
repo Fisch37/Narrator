@@ -20,8 +20,14 @@ class ClosableEditor(EditorPage):
     Subclass of EditorPage that adds a "Close" button into the last view row.
     Subclasses may override the existing `ClosableEditor.on_close` 
     method to implement custom closing interactions.
+    
+    Implements a custom `await` syntax that ensures on_end finishes.
     """
     _close_timeout_message: str
+    
+    def __init__(self, *args, **kwargs):
+        self.__ending_task: asyncio.Task|None = None
+        super().__init__(*args, **kwargs)
     
     def __init_subclass__(cls, *, close_timeout_message: str|None=None, **kwargs) -> None:
         if close_timeout_message is None:
@@ -67,5 +73,23 @@ class ClosableEditor(EditorPage):
     
     def stop(self) -> None:
         # Allows on_end to be async which is expected to be the common case
-        asyncio.create_task(self.on_end())
+        self.__ending_task = asyncio.create_task(self.on_end())
         return super().stop()
+    
+    def __await__(self):
+        if self.__ending_task is not None:
+            return self.__ending_task.__await__()
+        return _never_generator()
+
+
+def _never_generator():
+    # The entire purpose of this generator function is to perform dark magic upon __await__.
+    # This function returns a generator that holds no items and allows ClosableEditor.__await__
+    # to function properly. Writing some code like
+    # yield from ()
+    # return
+    # in __await__ would break the if-branch of the program, 
+    # not using any yield would make it a sometimes-generator function.
+    # Needless to say: Removing this function is probably impossible and, honestly, 
+    # you should not look at it too hard.
+    yield from ()

@@ -2,10 +2,12 @@ import asyncio
 from collections.abc import Callable, Coroutine
 from logging import getLogger
 from typing import Any, Literal, NamedTuple
+from weakref import WeakValueDictionary
 
 import discord
 from discord import ButtonStyle, ui
 from sqlalchemy.ext.asyncio import AsyncSession
+from data.sql.engine import Base, get_session
 
 from data.sql.ormclasses import Mask, MaskField
 from extensions.masks.mask_show import mask_to_embed
@@ -258,6 +260,21 @@ class FieldMoveView(ui.View):
 
 class MaskEditor(ClosableEditor, OwnedEditor):
     """This editor allows modifying the selected mask"""
+    
+    MASKS_IN_EDIT: WeakValueDictionary[int, "MaskEditor"] = WeakValueDictionary()
+    """
+    This dictionary is responsible for keeping track of masks that have an open editor.
+    Masks are stored by id to avoid accumulating detached instances.
+    
+    When initialising an editor, a mask's id should be checked against this set and added to it.
+    There should never be two running editors for the same mask at one time.
+    
+    Additionally, the editor that is responsible for the mask is stored as a value
+    to allow force-closing it when the user wishes.
+    Values are stored with a weak reference, meaning when the editor is only referenced here,
+    the entire entry is removed. The editor should still take care to remove itself when it ends.
+    """
+    
     def __init__(
         self,
         message: discord.Message|None=None,
@@ -265,11 +282,20 @@ class MaskEditor(ClosableEditor, OwnedEditor):
         *,
         owner: discord.Member,
         mask: Mask,
-        session: AsyncSession|None=None
+        # I lie here, but that way typecheckers understand what I'm doing
+        session: AsyncSession=None # type: ignore
     ):
+        type(self).check_mask_collision(mask)
+        self.MASKS_IN_EDIT[mask.id] = self
+        
         self.mask = mask
         self.embed: discord.Embed
-        self.session = session
+        self._created_session = session is None
+        if self._created_session:
+            self.session = get_session()
+        else:
+            self.session = session
+        self.session.add(mask)
         super().__init__(message, embed or discord.Embed(), owner=owner)
 
     async def update(self):
@@ -281,6 +307,9 @@ class MaskEditor(ClosableEditor, OwnedEditor):
         await super().update()
     
     async def on_end(self) -> None:
+        self.MASKS_IN_EDIT.pop(self.mask.id)
+        if self._created_session:
+            await self.session.close()
         if self.message is None:
             LOGGER.error("MaskEditor ended without ever having a message!")
         await self.message.edit(content="```\nThis editor has ended.```", view=None)
@@ -326,6 +355,7 @@ class MaskEditor(ClosableEditor, OwnedEditor):
             self.mask.fields.append(field)
         else:
             self.mask.fields.insert(modal.position, field)
+        await self.mask.update(session=self.session)
     
     async def _sequenced_selector(
         self,
@@ -406,6 +436,20 @@ class MaskEditor(ClosableEditor, OwnedEditor):
         # TODO: Do I care? Maybe later!
         self.mask.fields.pop(selector.selected_index)
         await self.mask.update(session=self.session)
+    
+    @classmethod
+    def check_mask_collision(cls, mask: Mask) -> None:
+        """
+        Checks whether an editor exists for the 
+        passed mask and raises EditCollisionError if it does
+        """
+        mask_id = mask.id
+        if mask_id in cls.MASKS_IN_EDIT:
+            raise EditCollisionError(
+                mask,
+                cls.MASKS_IN_EDIT[mask_id],
+                "This mask already has an editor associated with it!"
+            )
 
 
 class MaskCreatorModal(ui.Modal):
@@ -427,3 +471,16 @@ class MaskCreatorModal(ui.Modal):
 
     async def on_submit(self, interaction: discord.Interaction) -> None:
         await interaction.response.defer()
+
+
+class EditCollisionError(RuntimeError):
+    """
+    Raised when an instance is already kept in another editor.
+    
+    Contains two extra attributes `entity` and `editor`,
+    which are the relevant objects.
+    """
+    def __init__(self, entity: Mask, editor: MaskEditor, *args):
+        self.entity = entity
+        self.editor = editor
+        super().__init__(*args)

@@ -9,7 +9,7 @@ from discord import app_commands
 from data.sql.ormclasses import Mask
 from data.utils.masks import cached_mask_names_by_member
 
-from extensions.masks.mask_editor import MaskCreatorModal, MaskEditor
+from extensions.masks.mask_editor import EditCollisionError, MaskCreatorModal, MaskEditor
 from extensions.masks.mask_show import PrivateShowView, mask_to_embed, summon_all_public_show_views
 from util.confirmation_view import ConfirmationView
 from util.coroutine_tools import may_fetch_member
@@ -23,7 +23,7 @@ class Masks(commands.Cog):
         # FIXME: Persistent views created here don't respond to interactions
         self._public_show_views = await summon_all_public_show_views(BOT)
         for view in self._public_show_views:
-            BOT.add_view(view, message_id=view.message.id)
+            BOT.add_view(view)
         pass
     
     async def cog_load(self) -> None:
@@ -116,13 +116,28 @@ class Masks(commands.Cog):
             return
         await interaction.response.defer(ephemeral=True)
         embed = await mask_to_embed(mask, interaction.user)
-        view = MaskEditor(
-            None,
-            embed,
-            owner=interaction.user,
-            mask=mask
-        )
-        message = await interaction.followup.send(view=view, embed=embed)
+        while True:
+            try:
+                view = MaskEditor(
+                    None,
+                    embed,
+                    owner=interaction.user,
+                    mask=mask
+                )
+            except EditCollisionError as e:
+                has_closed_collision = await self._close_colliding_editor_if_requested(
+                    interaction,
+                    e.editor
+                )
+                if not has_closed_collision:
+                    await interaction.followup.send(
+                        "Alright! Bye bye!",
+                        ephemeral=True
+                    )
+                    return
+            else:
+                break
+        message = await interaction.followup.send(view=view, embed=embed, ephemeral=True)
         view.message = message
         await view.update()
         await view.update_message()
@@ -225,6 +240,33 @@ class Masks(commands.Cog):
             )
             for name in islice(filtered_masks, 25)
         ]
+    
+    async def _close_colliding_editor_if_requested(
+        self,
+        interaction: discord.Interaction,
+        /,
+        collision: MaskEditor
+    ) -> bool:
+        """
+        Asks the user if they want to close the editor that is colliding and does so if requested.
+        
+        Returns a boolean whether the editor was closed.
+        """
+        confirm_view = ConfirmationView(
+            confirm_style=discord.ButtonStyle.danger,
+            cancel_style=discord.ButtonStyle.success
+        )
+        await interaction.followup.send(
+            ":warning: This mask already has an open editor! Would you like to close it?",
+            ephemeral=True,
+            view=confirm_view
+        )
+        should_close = await confirm_view
+        if should_close:
+            collision.stop()
+            await collision # Wait for on_end to finish. 
+            # Avoids race condition with the loop in edit_mask
+        return should_close
     pass
 
 
