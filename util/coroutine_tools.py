@@ -4,8 +4,10 @@ Provides may-fetch functions that switch from cache to API when necessary.
 Also includes the may_fetch_generator function,
 that allows dynamic generation of may-fetch-functions.
 """
-from typing import Callable, TypeVar, Any, TypeVarTuple
+from typing import AsyncIterable, Callable, Iterable, TypeVar, Any, TypeVarTuple
 from collections.abc import Coroutine
+from collections import deque
+
 from discord import Guild
 from discord.ext.commands import Bot
 
@@ -50,3 +52,24 @@ may_fetch_channel_or_thread = may_fetch_generator(
     Guild.get_channel_or_thread,
     Guild.fetch_channel
 )
+
+
+async def preload[T](iterable: AsyncIterable[T]) -> Iterable[T]:
+    """
+    Fetches all elements from an async iterable and exposes them as a sync iterable.
+    
+    This may prove useful for synchronising certain operations, but has O(n) space
+    complexity.
+    """
+    queue: deque[T] = deque()
+    async for element in iterable:
+        queue.append(element)
+    
+    return _consume_deque(queue)
+
+def _consume_deque[T](queue: deque[T]) -> Iterable[T]:
+    while True:
+        try:
+            yield queue.pop()
+        except IndexError:
+            return
