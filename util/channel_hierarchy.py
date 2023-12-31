@@ -19,7 +19,7 @@ Some functions in here may be async others may not.
 
 Private channels do not have a hierarchy and are thus not supported.
 """
-from typing import Any, Generator, Sequence, overload, Union, Never
+from typing import Generator, Literal, Sequence, overload, Union, Never
 from itertools import filterfalse
 import discord
 
@@ -192,3 +192,77 @@ def is_parent(parent: HierarchyNode, child: HierarchyNode) -> bool:
     if parent == actual_parent:
         return True
     return is_parent(parent, actual_parent)
+
+## These are, by far, not all overloads that should be here, but doing all those permutations
+## will make my head explode so I'll just add stuff when I find out it's missing.
+@overload
+def get_all_parents(
+    channel: HierarchyRoot,
+    *,
+    include_this: Literal[True],
+    include_root: bool=True
+) -> Generator[HierarchyRoot, None, None]: ...
+
+@overload
+def get_all_parents(
+    channel: HierarchyRoot,
+    *,
+    include_this: Literal[False],
+    include_root: bool=True
+) -> Generator[Never, None, None]: ...
+
+@overload
+def get_all_parents(
+    channel: HierarchySubnode,
+    *,
+    include_this: Literal[False],
+    include_root: Literal[False]
+) -> Generator[HierarchyBranch, None, None]: ...
+
+@overload
+def get_all_parents(
+    channel: HierarchySubnode,
+    *,
+    include_this: Literal[True],
+    include_root: Literal[False]
+) -> Generator[HierarchySubnode, None, None]: ...
+
+@overload
+def get_all_parents(
+    channel: HierarchySubnode,
+    *,
+    include_this: Literal[False],
+    include_root: bool=True
+) -> Generator[HierarchyParent, None, None]: ...
+
+@overload  # Catch-all overload
+def get_all_parents(
+    channel: HierarchyNode,
+    *,
+    include_this: bool=False,
+    include_root: bool=True
+) -> Generator[HierarchyNode, None, None]: ...
+
+def get_all_parents(
+    channel: HierarchyNode,
+    *,
+    include_this: bool=False,
+    include_root: bool=True
+) -> Generator[HierarchyNode, None, None]:
+    """
+    Yields all parents of the passed channel from lowest to highest.
+    
+    If `include_this` is set to True, the first element will be the passed channel.
+    
+    If `include_root` is set to True (the default), 
+    the last element will always be a `HierarchyRoot` object.
+    """
+    if include_this:
+        yield channel
+    parent = get_parent(channel)
+    if parent is None:
+        return
+    
+    if include_root or not isinstance(parent, HierarchyRoot):
+        yield parent
+    yield from get_all_parents(parent, include_this=False, include_root=include_root)
