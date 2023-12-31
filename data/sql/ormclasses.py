@@ -4,17 +4,29 @@ Classes defined herein should **never** be imported outside of database
 code! **Outsourcing database interactions is required!**
 """
 from typing import overload
-from sqlalchemy import ForeignKey, UniqueConstraint, select
+from sqlalchemy import ForeignKey, select
 from sqlalchemy.orm import mapped_column, Mapped, relationship
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.ext.orderinglist import OrderingList, ordering_list
 
 from discord.ext.commands import Bot
 import discord
-from data.sql.engine import Base, Snowflake, may_make_session, may_make_session_with_transaction
-from data.sql.special_types import FieldsList
 
+from data.sql.engine import Base, Snowflake, may_make_session, may_make_session_with_transaction
 from util.coroutine_tools import may_fetch_guild, may_fetch_member, may_fetch_channel_or_thread
+
+
+def _ids_from_member(member: discord.Member|int, guild_id: int|None) -> tuple[int, int]:
+    """
+    Returns a tuple of member id and guild id extracted from the two parameters.
+    `guild_id` may be None if `member` is a `discord.Member` object.
+    """
+    if isinstance(member, discord.Member):
+        member_id = member.id
+        guild_id = member.guild.id
+    else:
+        member_id = member
+    return member_id, guild_id  # type: ignore
 
 
 class Mask(Base):
@@ -170,11 +182,7 @@ class Mask(Base):
         Gets all masks owned by the `owner` within the specified guild.
         Accepts a `discord.Member` argument in replacement of `guild_id`.
         """
-        if isinstance(owner, discord.Member):
-            owner_id = owner.id
-            guild_id = owner.guild.id
-        else:
-            owner_id = owner
+        owner_id, guild_id = _ids_from_member(owner, guild_id)
         async with may_make_session(session) as session:
             result = await session.scalars(
                 select(Mask)
@@ -211,12 +219,7 @@ class Mask(Base):
         *,
         session: AsyncSession|None=None
     ) -> "Mask|None":
-        if isinstance(owner, discord.Member):
-            owner_id = owner.id
-            guild_id = owner.guild.id
-        else:
-            owner_id = owner
-        
+        owner_id, guild_id = _ids_from_member(owner, guild_id)
         async with may_make_session(session) as session:
             return await session.scalar(
                 select(Mask)
