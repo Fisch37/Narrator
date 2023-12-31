@@ -3,6 +3,7 @@ SQL Object Reference Models.
 Classes defined herein should **never** be imported outside of database
 code! **Outsourcing database interactions is required!**
 """
+import asyncio
 from typing import overload
 from sqlalchemy import ForeignKey, select
 from sqlalchemy.orm import mapped_column, Mapped, relationship
@@ -14,7 +15,13 @@ import discord
 
 from data.sql.engine import Base, Snowflake, may_make_session, may_make_session_with_transaction
 from util.coroutine_tools import may_fetch_guild, may_fetch_member, may_fetch_channel_or_thread
+from util.channel_hierarchy import HierarchySubnode as ChannelOrThread
 
+def ensure_id(obj: int|discord.abc.Snowflake) -> int:
+    if not isinstance(obj, int):
+        return obj.id
+    else:
+        return obj
 
 def _ids_from_member(member: discord.Member|int, guild_id: int|None) -> tuple[int, int]:
     """
@@ -62,6 +69,13 @@ class Mask(Base):
         init=False
     )
     """KEEP OUT! Only for cascading purposes!"""
+    _applications: Mapped[list["AppliedMask"]] = relationship(
+        back_populates="mask",
+        cascade="delete",  # still don't touch this
+        repr=False,
+        init=False
+    )
+    """NO TOUCHY! Only for cascading!"""
 
     async def may_fetch_owner(self, bot: Bot) -> discord.Member:
         """
@@ -321,3 +335,114 @@ class MaskBillboard(Base):
             )
         # Apparently type checkers don't have hasattr as a TypeGuard-ish thing?
         return await channel.fetch_message(self.message_id)  # type: ignore
+
+
+class AppliedMask(Base):
+    """Holds information about how a mask is applied in a given channel"""
+    
+    __tablename__ = "applied_masks"
+    
+    mask_id: Mapped[int] = mapped_column(ForeignKey(Mask.id), init=False)
+    mask: Mapped[Mask] = relationship(cascade="", lazy="immediate")
+    channel_id: Mapped[Snowflake] = mapped_column(primary_key=True)
+    guild_id: Mapped[Snowflake]
+    owner_id: Mapped[Snowflake] = mapped_column(primary_key=True)
+    recursive: Mapped[bool]
+    
+    @staticmethod
+    async def new(
+        mask: Mask,
+        owner: discord.Member|discord.User,
+        channel: ChannelOrThread,
+        recursive: bool,
+        *,
+        session: AsyncSession|None=None
+    ) -> "AppliedMask":
+        obj = AppliedMask(
+            mask,
+            channel.id,
+            channel.guild.id,
+            owner.id,
+            recursive
+        )
+        async with may_make_session_with_transaction(session, True) as (session, _):
+            session.add_all((obj, mask))
+            await session.flush()
+        return obj
+    
+    @staticmethod
+    async def get(
+        owner: int|discord.User|discord.Member,
+        channel: int|ChannelOrThread,
+        *,
+        session: AsyncSession|None=None
+    ) -> "AppliedMask|None":
+        owner = ensure_id(owner)
+        channel = ensure_id(channel)
+        async with may_make_session(session) as session:
+            return await session.get(AppliedMask, (owner, channel))
+    
+    @staticmethod
+    async def get_all(*, session: AsyncSession):
+        async with may_make_session(session) as session:
+            return await session.stream_scalars(
+                select(AppliedMask)
+                .execution_options(yield_per=10)
+            )
+    
+    async def update(self, *, session: AsyncSession|None=None):
+        async with may_make_session_with_transaction(session, True) as (session, _):
+            session.add(self)
+    
+    async def delete(self, *, session: AsyncSession|None=None):
+        async with may_make_session_with_transaction(session, True) as (session, _):
+            await session.delete(self)
+    
+    async def may_fetch_channel(self, bot: Bot):
+        guild = await may_fetch_guild(bot, self.guild_id)
+        return await may_fetch_channel_or_thread(guild, self.channel_id)
+    
+    async def get_mask(self, *, session: AsyncSession|None=None) -> Mask:
+        """
+        Returns the mask associated with this application.
+        In contrast to awaitable_attrs this does not require
+        this object to be part of a session.
+        """
+        async with may_make_session(session) as session:
+            needs_adding = self not in session
+            if needs_adding:
+                session.add(self)
+            try:
+                return await self.awaitable_attrs.mask
+            finally:
+                # This may be an uncommon way to do it, but it feels better
+                if needs_adding:
+                    session.expunge(self)
+    
+    async def to_embed(
+        self,
+        bot: Bot,
+        embed: discord.Embed|None=None
+    ) -> discord.Embed:
+        """Generates or overrides a passed embed to represent this object."""
+        if embed is None:
+            embed = discord.Embed()
+        
+        channel_task = asyncio.create_task(self.may_fetch_channel(bot))
+        owner_task = asyncio.create_task(self.mask.may_fetch_owner(bot))
+        channel = await channel_task
+        owner = await owner_task
+        
+        embed.title = self.mask.name
+        embed.colour = discord.Colour.blue()
+        embed.set_author(name=owner.display_name, icon_url=owner.display_avatar.url)
+        embed.set_image(url=self.mask.avatar_url)
+        
+        embed.clear_fields()
+        embed.add_field(name="Channel", value=channel.mention)
+        embed.add_field(
+            name="Includes Subchannels",
+            value=":white_check_mark:" if self.recursive else ":x:"
+        )
+        
+        return embed

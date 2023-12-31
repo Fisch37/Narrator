@@ -5,6 +5,7 @@ from discord.ext import commands
 from discord import app_commands
 from data.sql.ormclasses import Mask
 
+from extensions.masks.mask_apply import AppliedMaskManager, ChannelOrThread
 from extensions.masks.mask_editor import EditCollisionError, MaskCreatorModal, MaskEditor
 from extensions.masks.mask_show import PrivateShowView, mask_to_embed, summon_all_public_show_views
 from extensions.masks.mask_transformer import MaskParameter, MaskTransformer
@@ -16,6 +17,10 @@ BOT: commands.Bot
 
 
 class Masks(commands.Cog):
+    def __init__(self) -> None:
+        self.application_manager = AppliedMaskManager()
+        super().__init__()
+    
     async def _summon_public_views_stored(self):
         # FIXME: Persistent views created here don't respond to interactions
         self._public_show_views = await summon_all_public_show_views(BOT)
@@ -25,6 +30,7 @@ class Masks(commands.Cog):
     
     async def cog_load(self) -> None:
         asyncio.create_task(self._summon_public_views_stored())
+        asyncio.create_task(self.application_manager.fetch_all())
         return await super().cog_load()
     
     mask = app_commands.Group(
@@ -187,6 +193,64 @@ class Masks(commands.Cog):
         await interaction.response.send_message(
             embed=embed,
             view=view,
+            ephemeral=True
+        )
+    
+    @mask.command(
+    name="apply",
+    description="Set a mask to use for the selected channel, or remove a set one"
+    )
+    @app_commands.describe(
+        mask="The mask to apply in the selected channel. Leave unset to remove a set mask.",
+        channel="The channel to apply the mask in. If left unset, uses the current channel",
+        include_subchannels="If enabled (the default) applies the passed mask for all subchannels as well. Does nothing if mask is unset."
+    )
+    async def apply_mask(
+        self,
+        interaction: discord.Interaction,
+        mask: MaskParameter|None=None,
+        channel: ChannelOrThread|None=None,
+        include_subchannels: bool=True
+    ):
+        if channel is None:
+            # Interaction channel can never be private because /mask is guild only
+            # Not sure when interaction channel could be None though...
+            channel = interaction.channel
+        if mask is None:
+            await self._remove_applied_mask(interaction, channel)
+            return
+        
+        app = await self.application_manager.set(
+            mask,
+            interaction.user,
+            channel,
+            include_subchannels
+        )
+        await interaction.response.send_message(
+            f"{mask.name} has been set as your mask for {channel.mention}!",
+            embed=await app.to_embed(BOT),
+            ephemeral=True
+        )
+    
+    async def _remove_applied_mask(
+        self,
+        interaction: discord.Interaction,
+        channel: ChannelOrThread
+    ) -> None:
+        app = await self.application_manager.hierarchical(interaction.user, channel)
+        if app is None:
+            await interaction.response.send_message(
+                ":x: There is no mask applied for this channel!",
+                ephemeral=True
+            )
+            return
+        await self.application_manager.remove(
+            interaction.user,
+            app.channel_id
+        )
+        true_channel = await app.may_fetch_channel(BOT)
+        await interaction.response.send_message(
+            f"Detached mask {app.mask.name} from channel {true_channel.mention}.",
             ephemeral=True
         )
     
