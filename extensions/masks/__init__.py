@@ -254,6 +254,32 @@ class Masks(commands.Cog):
             ephemeral=True
         )
     
+    @mask.command(
+        name="reveal",
+        description="Show the mask applied in the selected channel"
+    )
+    @app_commands.describe(
+        channel="The channel to target. If unset, uses the current channel."
+    )
+    async def reveal_mask(
+        self,
+        interaction: discord.Interaction,
+        channel: ChannelOrThread|None=None
+    ):
+        if channel is None:
+            channel = interaction.channel
+        app = await self.application_manager.hierarchical(interaction.user, channel)
+        if app is None:
+            await interaction.response.send_message(
+                f"There is no mask applied in {channel.mention}",
+                ephemeral=True
+            )
+        else:
+            await interaction.response.send_message(
+                embed=await app.to_embed(BOT),
+                ephemeral=True
+            )
+    
     @edit_mask.error
     @mask_remove.error
     @mask_show.error
