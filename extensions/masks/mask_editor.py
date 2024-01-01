@@ -309,6 +309,7 @@ class MaskEditor(ClosableEditor, OwnedEditor):
     async def on_end(self) -> None:
         self.MASKS_IN_EDIT.pop(self.mask.id)
         if self._created_session:
+            await self.session.commit()
             await self.session.close()
         if self.message is None:
             LOGGER.error("MaskEditor ended without ever having a message!")
