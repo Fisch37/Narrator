@@ -251,13 +251,14 @@ class MaskField(Base):
     """
     __tablename__ = "mask_fields"
 
+    id: Mapped[int] = mapped_column(primary_key=True, init=False)
     mask_id: Mapped[int] = mapped_column(
         ForeignKey("masks.id"),
         init=False,
         primary_key=True
     )
-    # NOTE: This may cause issues with OrderingList (see the docs)
-    _index: Mapped[int] = mapped_column(init=False, primary_key=True)
+    # Cannot be a primary key due to issues with OrderingList (see docs)
+    _index: Mapped[int] = mapped_column(init=False)
     name: Mapped[str]
     value: Mapped[str]
     inline: Mapped[bool]
