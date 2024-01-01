@@ -2,8 +2,18 @@
 This module provides an pool object that manages webhooks for the bot.
 There should only be one of these pools per bot.
 """
-from discord import Webhook, WebhookType, TextChannel, Guild
+from typing import Union
+
+import discord
+from discord import Webhook, WebhookType, Guild
 from discord.ext.commands import Bot
+
+SupportsWebhooks = Union[
+    discord.TextChannel,
+    discord.ForumChannel,
+    discord.VoiceChannel,
+    discord.StageChannel
+]
 
 
 class WebhookPool:
@@ -14,12 +24,12 @@ class WebhookPool:
     NOTE: When scaling up a cache bound might become necessary.
     """
     def __init__(self, bot: Bot):
-        self.pool: dict[Guild, dict[TextChannel, Webhook]] = {}
+        self.pool: dict[Guild, dict[SupportsWebhooks, Webhook]] = {}
         self._bot = bot
 
     async def get(
             self,
-            channel: TextChannel,
+            channel: SupportsWebhooks,
             *,
             reason: str="New Webhook gathered from pool"
     ) -> Webhook:
@@ -43,7 +53,7 @@ class WebhookPool:
 
     async def _fetch_webhook(
             self,
-            channel: TextChannel
+            channel: SupportsWebhooks
     ) -> Webhook|None:
         """
         Fetches and returns a webhook owned by the bot
@@ -62,7 +72,7 @@ class WebhookPool:
 
     async def _create_new_webhook(
             self,
-            channel: TextChannel,
+            channel: SupportsWebhooks,
             reason: str,
             /
     ) -> Webhook:
