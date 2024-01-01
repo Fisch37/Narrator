@@ -1,14 +1,21 @@
 import asyncio
 from logging import getLogger
+from io import BytesIO
+
 import discord
 from discord.ext import commands
 from discord import app_commands
 from discord.utils import MISSING
+from pydantic import ValidationError
 
 from data.sql.ormclasses import Mask
 from extensions.masks.mask_apply import AppliedMaskManager, ChannelOrThread
 from extensions.masks.mask_editor import EditCollisionError, MaskCreatorModal, MaskEditor
 from extensions.masks.mask_show import PrivateShowView, mask_to_embed, summon_all_public_show_views
+from extensions.masks.mask_serialiser import (
+    serialize as mask_serialize,
+    deserialize as mask_deserialize
+)
 from extensions.masks.mask_transformer import MaskParameter, MaskTransformer
 from util.confirmation_view import ConfirmationView
 from util.coroutine_tools import may_fetch_member
@@ -290,10 +297,89 @@ class Masks(commands.Cog):
                 ephemeral=True
             )
     
+    @mask.command(
+        name="export",
+        description="Export a mask into a single file for easy transfer."
+    )
+    async def export_mask(
+        self,
+        interaction: discord.Interaction,
+        mask: MaskParameter
+    ):
+        loop = asyncio.get_running_loop()
+        await interaction.response.defer(ephemeral=True)
+        serialized = await loop.run_in_executor(None, mask_serialize, mask)
+        # FIXME: This sanitisation might not fully encompass all illegal characters.
+        sanitized_mask_name = (
+            mask.name.encode("ascii", "ignore")
+            .decode("ascii")
+        )
+        await interaction.followup.send(
+            f"We've turned {mask.name} into a little puppet for you!",
+            file=discord.File(
+                BytesIO(serialized.encode("utf-8")),
+                filename="mask_" + sanitized_mask_name + ".json"
+            ),
+            ephemeral=True
+        )
+    
+    @mask.command(
+        name="import",
+        description="Import a mask from a JSON file"
+    )
+    async def improt_mask(
+        self,
+        interaction: discord.Interaction,
+        file: discord.Attachment
+    ):
+        # TODO: Write this into a config entry
+        # Unfortunately the config is inaccessible ouside main right now
+        if file.size > 1024**2:
+            # Sanity. This bot is not designed for public use,
+            # but I'd still like to keep my internet connection, thank you very much.
+            await interaction.response.send_message(
+                ":x: Woah, now _that's_ a character sheet! (Puppet file too large)",
+                ephemeral=True
+            )
+            return
+        raw_content = await file.read()
+        await interaction.response.defer(ephemeral=True)
+        loop = asyncio.get_running_loop()
+        try:
+            mask = await loop.run_in_executor(
+                None,
+                mask_deserialize,
+                raw_content.decode("utf-8")
+            )
+        except UnicodeDecodeError:
+            await interaction.followup.send(
+                ":x: What kind of language is that?! (Invalid characters in file)",
+                ephemeral=True
+            )
+        except ValidationError:
+            await interaction.followup.send(
+                ":x: Now that doesn't look like something I'd write...\
+                Are you... trying to trick me? (Puppet file is not valid)",
+                ephemeral=True
+            )
+        else:
+            # It's weird that these values can be None even when I wrap things in a dataclass,
+            # but it#s handy here.
+            mask.owner_id = interaction.user.id
+            mask.guild_id = interaction.guild.id
+            # "update" the mask. We all know what this really does
+            await mask.update()
+            await interaction.followup.send(
+                f"Animated puppet of {mask.name}!",
+                embed=await mask.to_embed(BOT),
+                ephemeral=True
+            )
+    
     @edit_mask.error
     @mask_remove.error
     @mask_show.error
     @apply_mask.error
+    @export_mask.error
     async def _mask_transform_error_handler(
         self,
         interaction: discord.Interaction,
