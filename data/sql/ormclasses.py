@@ -58,6 +58,7 @@ class Mask(Base):
         order_by="MaskField._index",
         lazy="immediate",
         cascade="all, delete-orphan",
+        default_factory=list,  # Don't ask me why this works
         collection_class=ordering_list("_index"),
         init=False
     )
@@ -251,11 +252,15 @@ class MaskField(Base):
     """
     __tablename__ = "mask_fields"
 
-    id: Mapped[int] = mapped_column(primary_key=True, init=False)
+    id: Mapped[int] = mapped_column(
+        primary_key=True,
+        init=False,
+        autoincrement=True,
+        nullable=False,
+    )
     mask_id: Mapped[int] = mapped_column(
         ForeignKey("masks.id"),
         init=False,
-        primary_key=True
     )
     # Cannot be a primary key due to issues with OrderingList (see docs)
     _index: Mapped[int] = mapped_column(init=False)
