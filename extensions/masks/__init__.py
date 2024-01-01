@@ -352,7 +352,7 @@ class Masks(commands.Cog):
             # Don't replace messages starting with //
             return
         channel: SupportsWebhooks|discord.Thread = message.channel
-        app = await self.application_manager.may_fetch(message.author, channel)
+        app = await self.application_manager.hierarchical(message.author, channel)
         if app is None:
             # No applied mask, means no action
             return
