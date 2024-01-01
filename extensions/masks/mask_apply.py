@@ -132,7 +132,7 @@ class AppliedMaskManager(metaclass=_SingularMeta):
     
     async def set(
         self,
-        mask: Mask,
+        mask: Mask|None,
         user: discord.User|discord.Member,
         channel: ChannelOrThread,
         recursive: bool

@@ -343,8 +343,8 @@ class AppliedMask(Base):
     
     __tablename__ = "applied_masks"
     
-    mask_id: Mapped[int] = mapped_column(ForeignKey(Mask.id), init=False)
-    mask: Mapped[Mask] = relationship(cascade="", lazy="immediate")
+    mask_id: Mapped[int|None] = mapped_column(ForeignKey(Mask.id), init=False)
+    mask: Mapped[Mask|None] = relationship(cascade="", lazy="immediate")
     channel_id: Mapped[Snowflake] = mapped_column(primary_key=True)
     guild_id: Mapped[Snowflake]
     owner_id: Mapped[Snowflake] = mapped_column(primary_key=True)
@@ -352,7 +352,7 @@ class AppliedMask(Base):
     
     @staticmethod
     async def new(
-        mask: Mask,
+        mask: Mask|None,
         owner: discord.Member|discord.User,
         channel: ChannelOrThread,
         recursive: bool,
@@ -403,22 +403,9 @@ class AppliedMask(Base):
         guild = await may_fetch_guild(bot, self.guild_id)
         return await may_fetch_channel_or_thread(guild, self.channel_id)
     
-    async def get_mask(self, *, session: AsyncSession|None=None) -> Mask:
-        """
-        Returns the mask associated with this application.
-        In contrast to awaitable_attrs this does not require
-        this object to be part of a session.
-        """
-        async with may_make_session(session) as session:
-            needs_adding = self not in session
-            if needs_adding:
-                session.add(self)
-            try:
-                return await self.awaitable_attrs.mask
-            finally:
-                # This may be an uncommon way to do it, but it feels better
-                if needs_adding:
-                    session.expunge(self)
+    async def may_fetch_owner(self, bot: Bot):
+        guild = await may_fetch_guild(bot, self.guild_id)
+        return await may_fetch_member(guild, self.owner_id)
     
     async def to_embed(
         self,
@@ -430,14 +417,17 @@ class AppliedMask(Base):
             embed = discord.Embed()
         
         channel_task = asyncio.create_task(self.may_fetch_channel(bot))
-        owner_task = asyncio.create_task(self.mask.may_fetch_owner(bot))
+        owner_task = asyncio.create_task(self.may_fetch_owner(bot))
         channel = await channel_task
         owner = await owner_task
         
-        embed.title = self.mask.name
+        if self.mask is not None:
+            embed.title = self.mask.name
+            embed.set_image(url=self.mask.avatar_url)
+        else:
+            embed.title = "Disabled Mask"
         embed.colour = discord.Colour.blue()
         embed.set_author(name=owner.display_name, icon_url=owner.display_avatar.url)
-        embed.set_image(url=self.mask.avatar_url)
         
         embed.clear_fields()
         embed.add_field(name="Channel", value=channel.mention)

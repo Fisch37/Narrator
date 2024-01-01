@@ -201,13 +201,13 @@ class Masks(commands.Cog):
         )
     
     @mask.command(
-    name="apply",
-    description="Set a mask to use for the selected channel, or remove a set one"
+        name="apply",
+        description="Set a mask or disable them to use for the selected channel"
     )
     @app_commands.describe(
-        mask="The mask to apply in the selected channel. Leave unset to remove a set mask.",
-        channel="The channel to apply the mask in. If left unset, uses the current channel",
-        include_subchannels="If enabled (the default) applies the passed mask for all subchannels as well. Does nothing if mask is unset."
+        mask="The mask to apply in the selected channel. Leave unset to disable masks for this channel.",
+        channel="The channel to apply the mask in. If left unset, uses the current channel.",
+        include_subchannels="If enabled (the default) applies the passed mask for all subchannels as well."
     )
     async def apply_mask(
         self,
@@ -220,9 +220,6 @@ class Masks(commands.Cog):
             # Interaction channel can never be private because /mask is guild only
             # Not sure when interaction channel could be None though...
             channel = interaction.channel
-        if mask is None:
-            await self._remove_applied_mask(interaction, channel)
-            return
         
         app = await self.application_manager.set(
             mask,
@@ -236,11 +233,20 @@ class Masks(commands.Cog):
             ephemeral=True
         )
     
-    async def _remove_applied_mask(
+    @mask.command(
+        name="detach",
+        description="Remove mask application from a specified channel"
+    )
+    @app_commands.describe(
+        channel="The channel to target"
+    )
+    async def detach_mask(
         self,
         interaction: discord.Interaction,
-        channel: ChannelOrThread
-    ) -> None:
+        channel: ChannelOrThread|None=None
+    ):
+        if channel is None:
+            channel = interaction.channel
         app = await self.application_manager.hierarchical(interaction.user, channel)
         if app is None:
             await interaction.response.send_message(
@@ -351,6 +357,9 @@ class Masks(commands.Cog):
             # No applied mask, means no action
             return
         mask = app.mask
+        if mask is None:
+            # Specifically blocking out masks
+            return
         
         if isinstance(channel, discord.Thread):
             non_thread_channel = channel.parent
