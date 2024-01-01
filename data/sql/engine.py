@@ -133,4 +133,6 @@ class may_make_session_with_transaction(may_make_session):
     async def __aexit__(self, exc, exc_type, traceback) -> None:
         if self._commit_on_close and exc is None:
             await self._transaction.commit()
+            await self._session.flush()
+        await self._transaction.__aexit__(exc, exc_type, traceback)
         return await super().__aexit__(exc, exc_type, traceback)
