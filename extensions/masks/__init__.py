@@ -3,14 +3,16 @@ from logging import getLogger
 import discord
 from discord.ext import commands
 from discord import app_commands
-from data.sql.ormclasses import Mask
+from discord.utils import MISSING
 
+from data.sql.ormclasses import Mask
 from extensions.masks.mask_apply import AppliedMaskManager, ChannelOrThread
 from extensions.masks.mask_editor import EditCollisionError, MaskCreatorModal, MaskEditor
 from extensions.masks.mask_show import PrivateShowView, mask_to_embed, summon_all_public_show_views
 from extensions.masks.mask_transformer import MaskParameter, MaskTransformer
 from util.confirmation_view import ConfirmationView
 from util.coroutine_tools import may_fetch_member
+from util.webhook_pool import SupportsWebhooks, WebhookPool
 
 LOGGER = getLogger("extensions.masks")
 BOT: commands.Bot
@@ -19,6 +21,7 @@ BOT: commands.Bot
 class Masks(commands.Cog):
     def __init__(self) -> None:
         self.application_manager = AppliedMaskManager()
+        self.webhook_pool = WebhookPool(BOT)
         super().__init__()
     
     async def _summon_public_views_stored(self):
@@ -36,7 +39,7 @@ class Masks(commands.Cog):
     mask = app_commands.Group(
         name="mask",
         description="Management command for use of masks.",
-        default_permissions=discord.Permissions(),
+        default_permissions=None,
         guild_only=True
     )
     
@@ -56,6 +59,7 @@ class Masks(commands.Cog):
                 "Woops! It looks like you timed out!",
                 ephemeral=True
             )
+            return
         # Crash prevention mechanisms
         # (I don't program well, Kaze :c)
         if not isinstance(interaction.user, discord.Member):
@@ -328,7 +332,63 @@ class Masks(commands.Cog):
             await collision # Wait for on_end to finish. 
             # Avoids race condition with the loop in edit_mask
         return should_close
-    pass
+    
+    
+    @commands.Cog.listener("on_message")
+    async def handle_mask_messages(self, message: discord.Message):
+        if (
+            message.guild is None
+            or message.author.bot
+            or message.content.startswith("//")
+        ):
+            # Don't consider DM messages
+            # Don't consider Bots
+            # Don't replace messages starting with //
+            return
+        channel: SupportsWebhooks|discord.Thread = message.channel
+        app = await self.application_manager.may_fetch(message.author, channel)
+        if app is None:
+            # No applied mask, means no action
+            return
+        mask = app.mask
+        
+        if isinstance(channel, discord.Thread):
+            non_thread_channel = channel.parent
+        else:
+            non_thread_channel = channel
+        if non_thread_channel is None:
+            await message.channel.send(
+                "Oh no! Couldn't send mask imitation: Thread parent is None"
+            )
+            LOGGER.error(f"Thread parent is None in {channel.id}")
+            return
+        webhook = await self.webhook_pool.get(
+            non_thread_channel,
+            reason="Mask send required new webhook"
+        )
+        await webhook.send(
+            content=message.content,
+            username=mask.name,
+            avatar_url=mask.avatar_url or message.author.display_avatar.url,
+            tts=message.tts,
+            embeds=message.embeds,
+            allowed_mentions=discord.AllowedMentions.none(),  # First message already mentions
+            thread=channel if isinstance(channel, discord.Thread) else MISSING,
+            silent=True  # First message already provides notifications
+        )
+        if len(message.attachments) > 0:
+            # TODO: Figure it whether we want to do attachments
+            return
+        try:
+            await message.delete()
+        except discord.errors.NotFound:
+            # The audacity!
+            pass
+        except discord.errors.Forbidden:
+            await message.channel.send(
+                "Woops! Seems I'm not allowed to delete messages around here. \
+                Please fix :pleading_face:"
+            )
 
 
 async def setup(bot: commands.Bot):
