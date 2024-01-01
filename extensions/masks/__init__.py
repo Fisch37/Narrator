@@ -283,6 +283,7 @@ class Masks(commands.Cog):
     @edit_mask.error
     @mask_remove.error
     @mask_show.error
+    @apply_mask.error
     async def _mask_transform_error_handler(
         self,
         interaction: discord.Interaction,
@@ -296,6 +297,9 @@ class Masks(commands.Cog):
                 ":x: That mask doesn't seem to exist!",
                 ephemeral=True
             )
+            # Monkey patching is fun, isn't it!
+            # Yeah, we need this so that the general error handler doesn't scream
+            error.is_handled = True # type: ignore
             return
     
     async def _close_colliding_editor_if_requested(

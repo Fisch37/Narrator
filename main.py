@@ -33,7 +33,31 @@ class CustomBot(commands.Bot):
         await self.tree.sync(guild=guild)
         await self.tree.fetch_commands(guild=guild)
         logging.info("Synced commands!")
+        self.tree.error(self.on_app_command_error)
         return await super().setup_hook()
+    
+    async def on_app_command_error(
+        self,
+        interaction: discord.Interaction,
+        exception: discord.app_commands.errors.AppCommandError
+    ) -> None:
+        if hasattr(exception, "is_handled") and exception.is_handled: # type: ignore
+            # Prevents duplicious error handling
+            return
+        if not interaction.response.is_done():
+            await interaction.response.defer(ephemeral=True)
+        await interaction.followup.send(
+            "Woops, an error occured!",
+            embed=discord.Embed(
+                colour=discord.Colour.red(),
+                description=f"```\n{exception!r}```"
+            ),
+            ephemeral=True
+        )
+        logging.exception(
+            "An error occured while an App Command was running!",
+            exc_info=exception
+        )
 
 
 def read_token():
