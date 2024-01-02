@@ -46,6 +46,7 @@ class Mask(Base):
 
     id: Mapped[int] = mapped_column(
         primary_key=True,
+        # TODO: Maybe it's a good idea to replace this with a row_id column, if possible
         autoincrement=True,
         init=False
     )
@@ -60,7 +61,6 @@ class Mask(Base):
         cascade="all, delete-orphan",
         default_factory=list,  # Don't ask me why this works
         collection_class=ordering_list("_index"),
-        init=False
     )
     
     _billboards: Mapped[list["MaskBillboard"]] = relationship(

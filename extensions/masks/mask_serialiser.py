@@ -1,6 +1,6 @@
 from pydantic import BaseModel
 
-from data.sql.ormclasses import Mask as SQLMask
+from data.sql.ormclasses import Mask as SQLMask, MaskField as SQLField
 
 class Field(BaseModel):
     name: str
@@ -47,7 +47,13 @@ def dejsonify(json_obj: Mask) -> SQLMask:
         None,
         None,
         json_obj.description,
-        json_obj.avatar_url
+        json_obj.avatar_url,
+        # Interestingly, even though this is a builtin list,
+        # the init converts it into an OrderingList
+        fields=[
+            SQLField(**field.model_dump())
+            for field in json_obj.fields
+        ]  # type: ignore
     )
 
 def serialize(mask: SQLMask) -> str:
