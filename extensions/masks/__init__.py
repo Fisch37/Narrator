@@ -327,7 +327,7 @@ class Masks(commands.Cog):
         name="import",
         description="Import a mask from a JSON file"
     )
-    async def improt_mask(
+    async def import_mask(
         self,
         interaction: discord.Interaction,
         file: discord.Attachment
@@ -364,7 +364,7 @@ class Masks(commands.Cog):
             )
         else:
             # It's weird that these values can be None even when I wrap things in a dataclass,
-            # but it#s handy here.
+            # but it's handy here.
             mask.owner_id = interaction.user.id
             mask.guild_id = interaction.guild.id
             # "update" the mask. We all know what this really does
