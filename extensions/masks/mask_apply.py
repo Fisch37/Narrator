@@ -1,13 +1,17 @@
 import asyncio
-from logging import getLogger
 from typing import NamedTuple
+from logging import getLogger
+from datetime import timedelta
+from time import monotonic
 from asyncio import Lock
+from collections import deque
 
 import discord
-from discord.ext.commands import Bot
-from data.sql.engine import get_session
+from discord.ext.tasks import loop as loop_task
 
+from data.sql.engine import get_session
 from data.sql.ormclasses import AppliedMask, Mask, ensure_id
+from util.auto_stop_modal import AutoStopModal
 from util.channel_hierarchy import HierarchySubnode as ChannelOrThread, get_all_parents
 
 User = discord.User|discord.Member|int
@@ -204,3 +208,102 @@ class AppliedMaskManager(metaclass=_SingularMeta):
             return app
         # If we never find an applied mask, there isn't one for this combination.
         return None  # This is not required, but I think it's better visually
+
+
+class MessageCache:
+    """
+    Caches all masked messages with their respective author
+    and date of publishing.
+    
+    An optional `lifetime` parameter can be set on initialisation,
+    which will be the time (in minutes) before a message is be deleted from cache.
+    """
+    
+    def __init__(self, *, lifetime: float|int|timedelta|None=None):
+        if isinstance(lifetime, (float, int)):
+            self._message_lifetime = lifetime*60
+            """How long a message should remain in cache after its creation (in seconds)"""
+        elif isinstance(lifetime, timedelta):
+            self._message_lifetime = lifetime.total_seconds()
+        else:
+            self._message_lifetime = lifetime
+        self._messages: dict[discord.WebhookMessage, discord.Member] = {}
+        """This dictionary stores who a message belongs to."""
+        self._call_tasks: dict[discord.WebhookMessage, asyncio.TimerHandle] = {}
+        # self._creation_data: deque[tuple[float, discord.WebhookMessage]] = deque()
+        # """
+        # Queue that stores exactly when an item was added, in order.
+        # The time of creation is determined by Python's monotonic clock.
+        # This queue is mainly used to figure out when items need to be removed again.
+        # """
+        # if lifetime is not None:
+        #     self._cleanup_task.start()
+    
+    # @loop_task(minutes=1)
+    # async def _cleanup_task(self):
+    #     # TODO: Find a way that doesn't suck
+    #     # Maybe call_later could be a replacement.
+    #     # That might end up being a lot of calls though.
+    #     if self._message_lifetime is None:
+    #         # This shouldn't be running anyway!
+    #         self._cleanup_task.stop()
+    #         return
+    #     # I learnt this form of iteration in school. I hate it.
+    #     # Sadly, I need to remove data from the deque during iteration.
+    #     tmp_queue = deque()
+    #     working_time = monotonic()
+    #     while self._creation_data:
+    #         creation_time, message = self._creation_data.popleft()
+    #         if creation_time + self._message_lifetime < working_time:
+    #             self.pop(message)
+    #         else:
+    #             tmp_queue.append((creation_time, message))
+    #         # All these operations and none of them are threadsafe
+    #         await asyncio.sleep(0)
+        
+    #     self._creation_data = tmp_queue
+    
+    def push(self, message: discord.WebhookMessage, owner: discord.Member):
+        """
+        Adds a new message to the cache
+        
+        Raises RuntimeError if the message is already cached.
+        """
+        if message in self._messages:
+            raise RuntimeError("This message is already cached!")
+        self._messages[message] = owner
+        if self._message_lifetime is not None:
+            # Only adding to the queue when messages have a lifetime
+            # This saves on memory and allows me to do some mischief in pop
+            self._call_tasks[message] = asyncio.get_running_loop().call_later(
+                self._message_lifetime,
+                self.pop,
+                message
+            )
+    
+    def pop(self, message: discord.WebhookMessage) -> discord.Member:
+        """
+        Removes a message from the cache
+        
+        Raises KeyError if the message is not cached.
+        """
+        self._call_tasks.pop(message, None)  # Ignore missing keys
+        return self._messages.pop(message)
+        # Not deleting from the creation queue because that would be expensive 
+        # and so long as the cleanup task runs, this will happen automatically.
+        # (also when there's no lifetime, I never add to the queue [see push])
+    
+    # def stop(self):
+    #     """Stops the cleanup task"""
+    #     self._cleanup_task.stop()
+    
+    
+    def __getitem__(self, key: discord.WebhookMessage) -> discord.Member:
+        return self._messages[key]
+
+
+class MaskMessageEditModal(AutoStopModal, title="Edit Message"):
+    content = discord.ui.TextInput(
+        label="Content",
+        style=discord.TextStyle.long,
+    )

@@ -9,7 +9,7 @@ from discord.utils import MISSING
 from pydantic import ValidationError
 
 from data.sql.ormclasses import Mask
-from extensions.masks.mask_apply import AppliedMaskManager, ChannelOrThread
+from extensions.masks.mask_apply import AppliedMaskManager, ChannelOrThread, MaskMessageEditModal, MessageCache
 from extensions.masks.mask_editor import EditCollisionError, MaskCreatorModal, MaskEditor
 from extensions.masks.mask_show import PrivateShowView, mask_to_embed, summon_all_public_show_views
 from extensions.masks.mask_serialiser import (
@@ -26,9 +26,22 @@ BOT: commands.Bot
 
 
 class Masks(commands.Cog):
+    CACHE_LIFETIME_MINS = 15
+    
     def __init__(self) -> None:
         self.application_manager = AppliedMaskManager()
         self.webhook_pool = WebhookPool(BOT)
+        self.mask_message_cache = MessageCache(lifetime=self.CACHE_LIFETIME_MINS)
+        self.mask_message_edit_menu = app_commands.ContextMenu(
+            name="Edit Message",
+            callback=self.mask_message_edit
+        )
+        self.mask_message_delete_menu = app_commands.ContextMenu(
+            name="Delete Message",
+            callback=self.mask_message_delete
+        )
+        BOT.tree.add_command(self.mask_message_edit_menu)
+        BOT.tree.add_command(self.mask_message_delete_menu)
         super().__init__()
     
     async def _summon_public_views_stored(self):
@@ -87,7 +100,7 @@ class Masks(commands.Cog):
             name=creation_modal_prompt.name.value,
             owner=owner,
             description=creation_modal_prompt.description.value,
-            # "" or None == None. This makes some degree of sense, but it's grey magic.
+            # ("" or None) == None. This makes some degree of sense, but it's grey magic.
             # TODO: Add some form of URL validation
             avatar_url=creation_modal_prompt.avatar_url.value or None
         )
@@ -425,6 +438,95 @@ class Masks(commands.Cog):
             # Avoids race condition with the loop in edit_mask
         return should_close
     
+    async def _webhook_message_from_message(
+        self,
+        message: discord.Message
+    ) -> discord.WebhookMessage:
+        channel_or_thread = message.channel
+        if isinstance(channel_or_thread, discord.Thread):
+            channel = channel_or_thread.parent
+            thread = channel_or_thread
+        else:
+            channel = channel_or_thread
+            thread = MISSING
+        webhook = await self.webhook_pool.get(
+            channel,
+            reason="Some reason... This should never happen"
+        )
+        return await webhook.fetch_message(message.id, thread=thread)
+    
+    async def _check_mask_message(
+        self,
+        interaction: discord.Interaction,
+        message: discord.Message
+    ) -> discord.Member|None:
+        try:
+            member = self.mask_message_cache[message]
+        except KeyError:
+            await interaction.response.send_message(
+                "This message is not a Mask message or has been for a long time.",
+                ephemeral=True
+            )
+            return None
+        if interaction.user != member:
+            await interaction.response.send_message(
+                "You do not have permission to change this message.",
+                ephemeral=True
+            )
+            return None
+        return member
+    
+    # This is a ContextMenu command. See __init__
+    async def mask_message_edit(
+        self,
+        interaction: discord.Interaction,
+        message: discord.Message
+    ):
+        member = await self._check_mask_message(interaction, message)
+        if member is None:
+            return
+        
+        modal = MaskMessageEditModal()
+        modal.content.default = message.content
+        await interaction.response.send_modal(modal)
+        if await modal.wait():
+            return
+        
+        webhook_message = await self._webhook_message_from_message(message)
+        await webhook_message.edit(content=modal.content.value)
+    
+    async def mask_message_delete(
+        self,
+        interaction: discord.Interaction,
+        message: discord.Message
+    ):
+        member = await self._check_mask_message(interaction, message)
+        if member is None:
+            return
+        
+        confirm_view = ConfirmationView(
+            confirm_style=discord.ButtonStyle.danger,
+            cancel_style=discord.ButtonStyle.success
+        )
+        await interaction.response.send_message(
+            "Are you sure you want to delete this message?",
+            view=confirm_view,
+            ephemeral=True
+        )
+        should_delete = await confirm_view
+        if not should_delete:
+            await interaction.edit_original_response(
+                content="Deletion cancelled.",
+                view=None
+            )
+            return
+        webhook_message = await self._webhook_message_from_message(message)
+        await webhook_message.delete()
+        await interaction.edit_original_response(
+            content="Message deleted!",
+            view=None
+        )
+    
     
     @commands.Cog.listener("on_message")
     async def handle_mask_messages(self, message: discord.Message):
@@ -461,7 +563,7 @@ class Masks(commands.Cog):
             non_thread_channel,
             reason="Mask send required new webhook"
         )
-        await webhook.send(
+        mask_message = await webhook.send(
             content=message.content,
             username=mask.name,
             avatar_url=mask.avatar_url or message.author.display_avatar.url,
@@ -469,8 +571,10 @@ class Masks(commands.Cog):
             embeds=message.embeds,
             allowed_mentions=discord.AllowedMentions.none(),  # First message already mentions
             thread=channel if isinstance(channel, discord.Thread) else MISSING,
-            silent=True  # First message already provides notifications
+            silent=True,  # First message already provides notifications
+            wait=True
         )
+        self.mask_message_cache.push(mask_message, message.author)
         if len(message.attachments) > 0:
             # TODO: Figure it whether we want to do attachments
             return
