@@ -5,6 +5,7 @@ from io import BytesIO
 import discord
 from discord.ext import commands
 from discord import app_commands
+from discord import MessageType
 from discord.utils import MISSING
 from pydantic import ValidationError
 
@@ -22,6 +23,10 @@ from util.coroutine_tools import may_fetch_member
 from util.webhook_pool import SupportsWebhooks, WebhookPool
 
 LOGGER = getLogger("extensions.masks")
+ALLOWED_MESSAGE_TYPES: tuple[MessageType, ...] = (
+    MessageType.default,
+    MessageType.reply,
+)
 BOT: commands.Bot
 
 
@@ -532,10 +537,12 @@ class Masks(commands.Cog):
     async def handle_mask_messages(self, message: discord.Message):
         if (
             message.guild is None
+            or message.type not in ALLOWED_MESSAGE_TYPES
             or message.author.bot
             or message.content.startswith("//")
         ):
             # Don't consider DM messages
+            # Don't consider system message types / stage message types
             # Don't consider Bots
             # Don't replace messages starting with //
             return
@@ -568,7 +575,7 @@ class Masks(commands.Cog):
             username=mask.name,
             avatar_url=mask.avatar_url or message.author.display_avatar.url,
             tts=message.tts,
-            embeds=message.embeds,
+            embeds=[embed for embed in message.embeds if embed.type == "rich"],
             allowed_mentions=discord.AllowedMentions.none(),  # First message already mentions
             thread=channel if isinstance(channel, discord.Thread) else MISSING,
             silent=True,  # First message already provides notifications
